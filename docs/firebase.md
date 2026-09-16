@@ -81,7 +81,19 @@ det några tiotal kB, långt under Firestores gräns på 1 MB. Baksidan: sparar 
 personer i samma sekund vinner den sista. Blir det ett problem är nästa steg ett
 dokument per resa.
 
+## Varför Firestore och inte Realtime Database
+
+Båda hade fungerat – datat är litet och läses i sin helhet, så Firestores bättre
+frågemöjligheter spelar ingen roll här. Det som avgjorde är **offline**: Firestore
+har en lokal cache i webbläsaren där skrivningar köas och skickas upp när nätet
+kommer tillbaka. Eftersom appen ligger på hemskärmen som en PWA går det att lägga
+in en resa utan täckning. Realtime Database hade tappat den skrivningen.
+
+Firestore är också det Google bygger vidare på; RTDB underhålls men får inga nya
+funktioner.
+
 ## Kostnad
 
 Firebases gratisnivå (Spark) räcker med mycket god marginal: 50 000 läsningar och
-20 000 skrivningar per dag. Familjen kommer inte i närheten.
+20 000 skrivningar per dag. Familjen kommer inte i närheten – en vanlig dag blir
+det en handfull läsningar och kanske någon enstaka skrivning.

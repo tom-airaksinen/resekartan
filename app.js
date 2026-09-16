@@ -49,7 +49,16 @@ async function cloudInit(){
   const a = app.initializeApp(window.FIREBASE_CONFIG);
   CLOUD.mod = { auth, store };
   CLOUD.auth = auth.getAuth(a);
-  CLOUD.db = store.getFirestore(a);
+  // Lokal cache: appen läser utan nät, och ändringar som görs offline köas och
+  // skickas upp när täckningen kommer tillbaka. Faller tillbaka till minnescache
+  // om webbläsaren nekar (privat fönster, flera flikar utan stöd).
+  try {
+    CLOUD.db = store.initializeFirestore(a, {
+      localCache: store.persistentLocalCache({ tabManager: store.persistentMultipleTabManager() })
+    });
+  } catch(e){
+    CLOUD.db = store.getFirestore(a);
+  }
   CLOUD.ref = store.doc(CLOUD.db, 'resekartan', 'data');
   await auth.setPersistence(CLOUD.auth, auth.browserLocalPersistence).catch(() => {});
   CLOUD.ready = true;
