@@ -2,11 +2,23 @@
 
 Interaktiv världskarta över familjens resor. Mobilen först.
 
+**Live:** https://tom-airaksinen.github.io/resekartan/
+
+## Deploya
+
+```sh
+git push          # GitHub Pages bygger om från main automatiskt
+```
+
+Repot är publikt – det krävs för Pages på GitHub Free. Familjens riktiga resor
+ligger aldrig här utan i `localStorage` (och senare Firebase), och lösenordet står
+varken i koden eller i den här filen.
+
 ## Status
 
-**Steg 2.** Appen går att använda: lösenordslås, karta, och ett gränssnitt för att
-lägga till, ändra och ta bort resor. Data ligger i `localStorage` på varje enhet.
-Nästa steg är Firebase, så alla fyra delar samma data.
+**Live sedan 2026-09-16.** Appen går att använda: lösenordslås, karta, och ett
+gränssnitt för att lägga till, ändra och ta bort resor. Data ligger i `localStorage`
+på varje enhet. Nästa steg är Firebase, så alla fyra delar samma data.
 
 ## Kör lokalt
 
@@ -137,7 +149,6 @@ eller klistra tillbaka.
 
 ## Nästa steg
 
-1. Publicera på GitHub Pages.
-2. Firebase som gemensam databas, så alla fyra kan lägga in från mobil, padda och dator.
+1. Firebase som gemensam databas, så alla fyra kan lägga in från mobil, padda och dator.
    Då blir också frågan om publik sajt eller inloggning skarp – se `docs/oppna-fragor.md`.
 3. Foton per resa, grupperade per person. Se `docs/mockup-feedback.md`.
