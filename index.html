@@ -133,26 +133,37 @@ label.fl{display:block;font-size:13px;font-weight:600;color:var(--ink-2);margin:
 #map.picking .land,#map.picking .pin circle{cursor:crosshair}
 
 /* ---------- Kartans överlägg ---------- */
-#top{position:absolute;left:0;right:0;top:0;display:flex;flex-direction:column;gap:10px;pointer-events:none;
+#top{position:absolute;left:0;right:0;top:0;z-index:6;display:flex;flex-direction:column;gap:10px;pointer-events:none;
   padding-top:calc(10px + env(safe-area-inset-top,0px));
   padding-left:calc(16px + env(safe-area-inset-left,0px));
   padding-right:calc(16px + env(safe-area-inset-right,0px))}
 #top>*{pointer-events:auto}
 .toprow{display:flex;align-items:center;gap:10px}
-.brand{display:flex;align-items:baseline;gap:8px;background:var(--surface);padding:6px 12px;border-radius:999px;box-shadow:0 2px 10px rgba(0,0,0,.08)}
-.brand h1{font-size:17px;font-weight:700}
-.brand small{color:var(--ink-3);font-size:12px}
+.brand{display:flex;align-items:center;gap:7px;background:var(--surface);padding:7px 12px 7px 14px;
+  border-radius:999px;box-shadow:0 2px 10px rgba(0,0,0,.08);max-width:100%;min-width:0}
+.brand h1{font-size:17px;font-weight:700;flex:none}
+.brand .dot{color:var(--ink-3);flex:none}
+.brand .sel{color:var(--ink-2);font-size:14px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.brand .chev{width:16px;height:16px;stroke:var(--ink-3);fill:none;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round;flex:none;transition:transform .18s}
+.brand[aria-expanded="true"] .chev{transform:rotate(180deg)}
 .iconbtn{display:grid;place-items:center;width:36px;height:36px;border-radius:50%;background:var(--surface);box-shadow:0 2px 10px rgba(0,0,0,.08);flex:none}
 .iconbtn svg{width:19px;height:19px;stroke:var(--ink-2);fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
 .cloud{width:10px;height:10px;border-radius:50%;background:var(--ink-3);flex:none;box-shadow:0 0 0 3px var(--surface)}
 .cloud.on{background:#1F9A78}
 .cloud.off{background:var(--danger)}
-.who{display:flex;gap:6px;align-self:flex-start;background:var(--surface);padding:5px;border-radius:999px;box-shadow:0 2px 10px rgba(0,0,0,.08);max-width:100%;overflow-x:auto;scrollbar-width:none}
-.who::-webkit-scrollbar{display:none}
-.who button{display:flex;align-items:center;gap:6px;padding:4px 10px 4px 4px;border-radius:999px;color:var(--ink-2);font-size:13px;font-weight:500;white-space:nowrap}
-.who button[aria-pressed="true"]{background:var(--surface-2);color:var(--ink)}
-.who .av{width:22px;height:22px;font-size:11px}
-.who .all{padding:4px 12px}
+.whomenu{align-self:flex-start;background:var(--surface);border-radius:16px;padding:6px;
+  box-shadow:0 8px 28px rgba(0,0,0,.18);min-width:232px;max-width:calc(100vw - 32px)}
+.whomenu button{display:flex;align-items:center;gap:10px;width:100%;padding:9px 10px;border-radius:10px;
+  font-size:15px;color:var(--ink);text-align:left}
+.whomenu button:hover{background:var(--surface-2)}
+.whomenu button .av{width:26px;height:26px;font-size:12px}
+.whomenu button .tick{margin-left:auto;width:19px;height:19px;border-radius:6px;border:1.5px solid var(--line);
+  display:grid;place-items:center;flex:none}
+.whomenu button[aria-pressed="true"] .tick{background:var(--accent);border-color:var(--accent)}
+.whomenu button[aria-pressed="true"] .tick svg{display:block}
+.whomenu button .tick svg{display:none;width:12px;height:12px;stroke:var(--accent-ink);fill:none;stroke-width:3;stroke-linecap:round;stroke-linejoin:round}
+.whomenu hr{border:0;border-top:1px solid var(--line);margin:5px 8px}
+.whomenu .lead{font-size:12.5px;color:var(--ink-3);padding:2px 10px 6px}
 .av{display:inline-flex;align-items:center;justify-content:center;text-align:center;
   width:26px;height:26px;border-radius:50%;background:var(--pc,var(--ink-3));color:#fff;
   font:600 12px/1 "Bricolage Grotesque",sans-serif;flex:none;overflow:hidden}
@@ -271,7 +282,7 @@ h2.sec:first-child{margin-top:8px}
 
 /* ---------- Helskärmsvyer ---------- */
 .view{position:absolute;inset:0;background:var(--surface);overflow-y:auto;
-  padding:calc(12px + env(safe-area-inset-top,0px)) calc(16px + env(safe-area-inset-right,0px)) calc(16px + env(safe-area-inset-bottom,0px)) calc(16px + env(safe-area-inset-left,0px))}
+  padding:calc(64px + env(safe-area-inset-top,0px)) calc(16px + env(safe-area-inset-right,0px)) calc(16px + env(safe-area-inset-bottom,0px)) calc(16px + env(safe-area-inset-left,0px))}
 .view>h1{font-size:26px;margin:6px 0 12px}
 .viewhead{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:6px 0 12px}
 .viewhead h1{font-size:26px}
@@ -429,7 +440,8 @@ h2.sec:first-child{margin-top:8px}
 #tabs{flex:none;display:flex;background:var(--surface);border-top:1px solid var(--line);position:relative;z-index:2;
   padding-bottom:env(safe-area-inset-bottom,0px);
   padding-left:env(safe-area-inset-left,0px);padding-right:env(safe-area-inset-right,0px)}
-#tabs button{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;padding:8px 0 6px;font-size:11px;font-weight:500;color:var(--ink-3)}
+#tabs button{flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;gap:2px;padding:8px 2px 6px;
+  font-size:10.5px;font-weight:500;color:var(--ink-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 #tabs button svg{width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
 #tabs button[aria-selected="true"]{color:var(--ink)}
 #tabs button[aria-selected="true"] svg{stroke:var(--accent)}
@@ -444,7 +456,7 @@ h2.sec:first-child{margin-top:8px}
   .zoom{display:flex;right:436px;top:16px}
   #tabs{order:0;flex-direction:column;width:76px;border-top:0;border-right:1px solid var(--line);justify-content:flex-start;padding-top:14px}
   #tabs button{flex:none;padding:12px 0}
-  .view{left:auto;width:420px;border-left:1px solid var(--line)}
+  .view{left:auto;width:420px;border-left:1px solid var(--line);padding-top:16px}
   .stats{grid-auto-flow:row;grid-template-columns:1fr 1fr;overflow:visible}
   #editor{left:76px}
   #pickbar{right:436px}
@@ -489,13 +501,15 @@ h2.sec:first-child{margin-top:8px}
 
     <div id="top">
       <div class="toprow">
-        <div class="brand"><h1>Resekartan</h1><small id="brandSub">familjen</small></div>
-        <span class="cloud" id="cloudDot" hidden title=""></span>
-        <button class="iconbtn" id="settingsBtn" aria-label="Inställningar">
-          <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.2"/><path d="M19.4 12a7.4 7.4 0 00-.1-1.2l2-1.5-2-3.4-2.3.9a7.4 7.4 0 00-2-1.2L14.6 3H9.4l-.4 2.6a7.4 7.4 0 00-2 1.2l-2.3-.9-2 3.4 2 1.5a7.4 7.4 0 000 2.4l-2 1.5 2 3.4 2.3-.9a7.4 7.4 0 002 1.2l.4 2.6h5.2l.4-2.6a7.4 7.4 0 002-1.2l2.3.9 2-3.4-2-1.5c.06-.4.1-.8.1-1.2z"/></svg>
+        <button class="brand" id="whoBtn" aria-expanded="false" aria-haspopup="true">
+          <h1>Resekartan</h1>
+          <span class="dot">·</span>
+          <span class="sel" id="whoLabel">Alla</span>
+          <svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 10l5 5 5-5"/></svg>
         </button>
+        <span class="cloud" id="cloudDot" hidden title=""></span>
       </div>
-      <div class="who" id="who" role="group" aria-label="Visa resor för"></div>
+      <div class="whomenu" id="whoMenu" role="group" aria-label="Visa resor för" hidden></div>
     </div>
 
     <div class="zoom"><button id="zin" aria-label="Zooma in">+</button><button id="zout" aria-label="Zooma ut">−</button></div>
@@ -521,6 +535,7 @@ h2.sec:first-child{margin-top:8px}
     <button role="tab" data-tab="resor" aria-selected="false"><svg viewBox="0 0 24 24"><path d="M4 8h16v11H4zM8 8V5h8v3M4 13h16"/></svg>Resor</button>
     <button role="tab" data-tab="stat" aria-selected="false"><svg viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>Statistik</button>
     <button role="tab" data-tab="lander" aria-selected="false"><svg viewBox="0 0 24 24"><path d="M5 21V4M5 4h13l-2 4 2 4H5"/></svg>Länder</button>
+    <button role="tab" data-tab="settings" aria-selected="false"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.2"/><path d="M19.4 12a7.4 7.4 0 00-.1-1.2l2-1.5-2-3.4-2.3.9a7.4 7.4 0 00-2-1.2L14.6 3H9.4l-.4 2.6a7.4 7.4 0 00-2 1.2l-2.3-.9-2 3.4 2 1.5a7.4 7.4 0 000 2.4l-2 1.5 2 3.4 2.3-.9a7.4 7.4 0 002 1.2l.4 2.6h5.2l.4-2.6a7.4 7.4 0 002-1.2l2.3.9 2-3.4-2-1.5c.06-.4.1-.8.1-1.2z"/></svg>Inställningar</button>
   </nav>
 </div>
 

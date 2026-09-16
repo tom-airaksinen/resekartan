@@ -140,8 +140,12 @@ användningen, och skulle kräva API-nyckel och kreditkort.
 
 **Resenärer:** familjen (`core: true`) är förkryssad på varje ny resa. Övriga –
 kompisar, mor- och farföräldrar – ligger under och kryssas i när de var med. Nya
-personer läggs till direkt i resedialogen eller under Inställningar. Filtret på
-kartan visar bara familjen; övriga syns på resorna men inte som filterval.
+personer läggs till direkt i resedialogen eller under Inställningar.
+
+**Filtret** sitter i toppbaren och gäller i alla flikar. Det är en mängd och betyder
+OCH: väljer man Tom och Karin visas resorna där **båda** var med, inte alla resor
+där någon av dem var med. Bara familjen går att filtrera på; övriga syns på resorna
+men är inte filterval.
 
 Familjen har varsin färg; övriga delar en dämpad stil och känns igen på namnet, som
 alltid står utskrivet där det spelar roll. I den kompakta avatarraden visas familjen

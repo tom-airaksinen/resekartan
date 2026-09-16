@@ -135,6 +135,16 @@ _(fylls på)_
   Visar den längsta platsen i *varje* land – utan den grupperingen fyllde en enda
   långresa hela listan med grannstäder. Raderna går till resan.
 
+## Steg 11 (2026-09-16)
+
+- **En toppbar i stället för två.** "Resekartan · Alla ▾" med utfällbar väljare;
+  de två pillren tog mycket höjd på mobilen.
+- **Filtret gäller flera personer samtidigt och betyder OCH** – Tom + Karin ger
+  resorna där båda var med. Det var poängen: se vad man gjort tillsammans.
+- **Filtret syns i alla flikar**, inte bara på kartan. Det påverkar ju statistiken
+  och reselistan lika mycket.
+- **Inställningar blev en femte flik** i stället för ett fritt flytande kugghjul.
+
 ## Senare – inte version 1
 
 Version 1 ska vara väldigt enkel, men datamodellen ska inte stänga dörren för detta.

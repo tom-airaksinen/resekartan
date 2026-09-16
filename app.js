@@ -306,11 +306,18 @@ const stopWho = (t, s) => (s.who && s.who.length ? s.who : t.who) || [];
 const stopStart = (t, s) => s.start || t.start;
 const stopEnd = (t, s) => s.end || t.end;
 
-/* ============================ Urval ============================ */
-let filter = null, tab = 'karta', sel = null, selCountry = null;
+/* ============================ Urval ============================
+   Filtret är en mängd och betyder OCH: väljer man Tom och Karin visas resorna
+   där båda var med, inte alla resor där någon av dem var med. Tom mängd = alla. */
+let filter = new Set(), tab = 'karta', sel = null, selCountry = null;
 
-const inFilter = (t, s) => !filter || stopWho(t, s).includes(filter);
-const visible = () => DB.trips.filter(t => !filter || t.who?.includes(filter) || t.stops.some(s => inFilter(t, s)));
+const inFilter = (t, s) => {
+  if(!filter.size) return true;
+  const who = stopWho(t, s);
+  for(const id of filter) if(!who.includes(id)) return false;
+  return true;
+};
+const visible = () => DB.trips.filter(t => t.stops.some(s => inFilter(t, s)));
 const done = list => list.filter(t => !t.planned);
 const byDateDesc = (a, b) => (b.start || '').localeCompare(a.start || '');
 
@@ -697,17 +704,44 @@ d3.select('#zin').on('click', () => ease(svg).call(zoom.scaleBy, 1.6));
 d3.select('#zout').on('click', () => ease(svg).call(zoom.scaleBy, 1/1.6));
 
 /* ============================ Filter ============================ */
-function renderWho(){
-  document.getElementById('who').innerHTML =
-    `<button class="all" aria-pressed="${filter === null}" data-p="">Alla</button>` +
-    family().map(p => `<button aria-pressed="${filter === p.id}" data-p="${esc(p.id)}">${av(p.id)}${esc(p.name)}</button>`).join('');
+const whoBtn = document.getElementById('whoBtn');
+const whoMenu = document.getElementById('whoMenu');
+
+function filterLabel(){
+  if(!filter.size) return 'Alla';
+  const names = [...filter].map(personName);
+  return names.length <= 2 ? names.join(' och ') : `${names.length} valda`;
 }
-document.getElementById('who').addEventListener('click', e => {
+const TICK = '<span class="tick"><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg></span>';
+
+function renderWho(){
+  document.getElementById('whoLabel').textContent = filterLabel();
+  whoMenu.innerHTML =
+    `<p class="lead">Visa resor där dessa var med</p>
+     <button data-p="" aria-pressed="${!filter.size}">Alla${TICK}</button><hr>` +
+    family().map(p => `<button data-p="${esc(p.id)}" aria-pressed="${filter.has(p.id)}">
+      ${av(p.id)}${esc(p.name)}${TICK}</button>`).join('');
+}
+function closeWho(){ whoMenu.hidden = true; whoBtn.setAttribute('aria-expanded', 'false'); }
+whoBtn.addEventListener('click', e => {
+  e.stopPropagation();
+  const open = whoMenu.hidden;
+  whoMenu.hidden = !open;
+  whoBtn.setAttribute('aria-expanded', String(open));
+});
+whoMenu.addEventListener('click', e => {
   const b = e.target.closest('button');
   if(!b) return;
-  filter = b.dataset.p || null; sel = null; selCountry = null;
+  e.stopPropagation();
+  const id = b.dataset.p;
+  if(!id) filter.clear();
+  else if(filter.has(id)) filter.delete(id);
+  else filter.add(id);
+  sel = null; selCountry = null;
   renderWho(); drawPins(); renderSheet(); renderViews(); resetZoom();
 });
+document.addEventListener('click', () => { if(!whoMenu.hidden) closeWho(); });
+addEventListener('keydown', e => { if(e.key === 'Escape' && !whoMenu.hidden) closeWho(); });
 
 /* ============================ Bottenark ============================ */
 const sheet = document.getElementById('sheet'), body = document.getElementById('sheetBody');
@@ -1055,7 +1089,7 @@ function renderViews(){
   };
   // Familjen står alltid med; gäster bara när de faktiskt varit någonstans
   const per = [
-    ...family().map(p => [p.id, count(p.id)]),
+    ...family().filter(p => !filter.size || filter.has(p.id)).map(p => [p.id, count(p.id)]),
     ...guests().map(p => [p.id, count(p.id)]).filter(x => x[1] > 0).sort((a,b) => b[1] - a[1])
   ];
   const maxC = Math.max(1, ...per.map(x => x[1]));
@@ -1205,7 +1239,7 @@ document.getElementById('view-settings').addEventListener('click', e => {
         t.who = (t.who||[]).filter(x => x !== p.id);
         t.stops.forEach(s => { if(s.who) s.who = s.who.filter(x => x !== p.id); });
       });
-      if(filter === p.id) filter = null;
+      filter.delete(p.id);
       saveDB(); refreshAll(); setTab('settings');
       toast(`${p.name} är borttagen.`);
     });
@@ -1285,7 +1319,7 @@ document.addEventListener('click', async e => {
 });
 
 /* ============================ Flikar ============================ */
-const VIEWS = ['resor', 'stat', 'lander', 'settings'];
+const VIEWS = ['resor', 'stat', 'lander', 'settings'];   // 'karta' är kartan under
 function setTab(t){
   tab = t;
   document.querySelectorAll('#tabs [role=tab]').forEach(b => b.setAttribute('aria-selected', String(b.dataset.tab === t)));
@@ -1302,7 +1336,7 @@ document.getElementById('tabs').addEventListener('click', e => {
   }
   setTab(b.dataset.tab);
 });
-document.getElementById('settingsBtn').onclick = () => setTab(tab === 'settings' ? 'karta' : 'settings');
+
 
 /* ============================ Redigering ============================ */
 const editor = document.getElementById('editor'), edBody = document.getElementById('edBody');
@@ -2145,8 +2179,6 @@ function start(){
   if(!CLOUD.on) DB = loadDB();
   normaliseDB();
   cloudDot(CLOUD.on ? 'on' : '', CLOUD.on ? 'Synkad med familjens data' : '');
-  document.getElementById('brandSub').textContent =
-    DB.people.map(p => p.name.split(' ')[0]).slice(0,4).join(', ');
   renderWho(); layout(); renderSheet(); renderViews();
   addEventListener('resize', layout);
 }
