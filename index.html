@@ -287,6 +287,18 @@ h2.sec:first-child{margin-top:8px}
 .years>div{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;height:100%;justify-content:flex-end;font-size:12px;color:var(--ink-2)}
 .years .col{width:100%;max-width:38px;background:var(--visited);border-radius:4px 4px 0 0}
 .years .v{font-variant-numeric:tabular-nums;color:var(--ink)}
+.toplist{display:flex;flex-direction:column;gap:2px}
+.topitem{display:grid;grid-template-columns:18px 24px 1fr auto;gap:10px;align-items:center;
+  width:100%;text-align:left;padding:9px 0;border-bottom:1px solid var(--line)}
+.topitem:last-child{border-bottom:0}
+.topitem .rank{font:600 13px/1 "Bricolage Grotesque",sans-serif;color:var(--ink-3);text-align:center}
+.topitem .flag{font-size:20px;line-height:1}
+.topitem .nm{min-width:0}
+.topitem .nm b{display:block;font-weight:600;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.topitem .nm small{display:block;color:var(--ink-2);font-size:12.5px}
+.topitem .km{font-variant-numeric:tabular-nums;font-weight:600;font-size:14px;white-space:nowrap}
+.topitem .track{grid-column:3 / -1;height:4px;border-radius:2px;background:var(--surface-2);overflow:hidden;margin-top:-2px}
+.topitem .fill{display:block;height:100%;background:var(--visited);border-radius:2px}
 .facts{display:grid;grid-template-columns:1fr auto;gap:8px 12px;font-size:14px;margin-top:8px}
 .facts dt{color:var(--ink-2)} .facts dd{margin:0;text-align:right;font-weight:500}
 .example{font-size:12px;color:var(--ink-3);margin:14px 0 0}

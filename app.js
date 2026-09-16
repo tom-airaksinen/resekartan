@@ -319,6 +319,36 @@ function stopsIn(iso){
   visible().forEach(t => t.stops.forEach(st => { if(st.iso === iso && inFilter(t, st)) out.push({ t, st }); }));
   return out.sort((a, b) => byDateDesc(a.t, b.t));
 }
+/* Fågelvägen från hemorten, storcirkel – inte rutt, utan hur långt bort platsen
+   faktiskt ligger. Varje plats räknas en gång även om ni varit där flera gånger. */
+const EARTH_KM = 6371;
+function distFromHome(lat, lon){
+  const h = DB.home?.place;
+  if(!h) return null;
+  return d3.geoDistance([h.lon, h.lat], [lon, lat]) * EARTH_KM;
+}
+// Den längsta platsen i varje land. Utan den grupperingen fyller en enda
+// långresa hela listan med grannstäder.
+function farthest(list, n = 6){
+  if(!DB.home?.place) return [];
+  const best = new Map();
+  done(list).forEach(t => t.stops.forEach(st => {
+    if(!inFilter(t, st)) return;
+    (st.places || []).forEach(p => {
+      const km = distFromHome(p.lat, p.lon);
+      if(km == null) return;
+      const prev = best.get(st.iso);
+      if(!prev || km > prev.km){
+        best.set(st.iso, { name: p.name, iso: st.iso, km, year: (t.start || '').slice(0, 4), id: t.id });
+      }
+    });
+  }));
+  return [...best.values()].sort((a, b) => b.km - a.km).slice(0, n);
+}
+const km = v => Math.round(v / 10) * 10 >= 1000
+  ? (Math.round(v / 10) * 10).toLocaleString('sv-SE') + ' km'
+  : Math.round(v) + ' km';
+
 function stats(list){
   const l = done(list), countries = new Set(), places = new Set();
   let dd = 0;
@@ -1047,6 +1077,23 @@ function renderViews(){
       `<div class="bar">${av(id)}<span class="nm">${esc(personName(id))}</span><div class="track"><div class="fill" style="--pc:${personColor(id)};width:${n/maxC*100}%"></div></div><span class="val">${n} ${n === 1 ? 'land' : 'länder'}</span></div>`).join('')}</div>
     <h2 class="sec">Resdagar per år</h2><div class="years">${Object.keys(years).sort().map(y =>
       `<div><span class="v">${years[y]}</span><div class="col" style="height:${years[y]/maxY*70}%"></div><span>${y}</span></div>`).join('') || '<div><span>–</span></div>'}</div>
+    ${(() => {
+      const top = farthest(list, 6);
+      if(!top.length) return '';
+      const max = top[0].km;
+      return `<h2 class="sec">Längst hemifrån</h2>
+        <p class="hint" style="margin:-2px 0 8px">Fågelvägen från ${esc(DB.home.place.name)} – den plats vi nått längst bort i varje land.</p>
+        <div class="toplist">${top.map((x, i) => `
+          <button class="topitem" data-trip="${esc(x.id)}">
+            <span class="rank">${i + 1}</span>
+            <span class="flag">${flagOf(x.iso)}</span>
+            <span class="nm"><b>${esc(x.name)}</b><small>${esc(countryName(x.iso))}${
+              x.year ? ' · ' + x.year : ''}</small></span>
+            <span class="km">${km(x.km)}</span>
+            <span class="track"><span class="fill" style="width:${x.km / max * 100}%"></span></span>
+          </button>`).join('')}</div>`;
+    })()}
+
     <h2 class="sec">Kul att veta</h2><dl class="facts">
       <dt>Längsta resan</dt><dd>${longest ? `${esc(longest.title)}, ${days(longest)} dagar` : '–'}</dd>
       <dt>Flest resor till</dt><dd>${most ? `${esc(countryName(most[0]))} (${most[1]})` : '–'}</dd>

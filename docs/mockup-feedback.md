@@ -129,6 +129,12 @@ _(fylls på)_
   zoomen – hela Rumänien blev några få jättefält. Samma klass av bugg som
   linjebredderna; mönstret krymper nu i takt med zoomen.
 
+## Steg 10 (2026-09-16)
+
+- **"Längst hemifrån"** i statistiken: topplista med fågelvägsavstånd från hemorten.
+  Visar den längsta platsen i *varje* land – utan den grupperingen fyllde en enda
+  långresa hela listan med grannstäder. Raderna går till resan.
+
 ## Senare – inte version 1
 
 Version 1 ska vara väldigt enkel, men datamodellen ska inte stänga dörren för detta.
