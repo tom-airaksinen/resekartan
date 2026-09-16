@@ -489,6 +489,17 @@ function drawPins(){
     visible().forEach(t => {
       const stops = t.stops.filter(s => inFilter(t, s));
       if(!stops.length) return;
+      if(t.id === sel){
+        // Den öppnade resan visar varenda ort – det är den man tittar på
+        stops.forEach((s, si) => (s.places || []).forEach(p =>
+          pins.push({ t, s, p, side: si > 0, city: true })));
+        const m = (stops[0].places || [])[0];
+        if(m) stops.slice(1).forEach(s => {
+          const p = (s.places || [])[0];
+          if(p) links.push([m, p]);
+        });
+        return;
+      }
       const main = stops[0], m = (main.places || [])[0];
       if(m) pins.push({ t, s: main, p: m });
       stops.slice(1).forEach(s => {
@@ -509,7 +520,8 @@ function drawPins(){
     .attr('transform', q => `translate(${proj([q.p.lon, q.p.lat])})`)
     .on('click', (e, q) => { if(pickTarget) return; e.stopPropagation(); showTrip(q.t.id); });
 
-  d3.select('#labels').selectAll('text').data(selCountry ? pins : [], key).join('text')
+  const labelled = selCountry || sel ? pins.filter(q => q.city) : [];
+  d3.select('#labels').selectAll('text').data(labelled, key).join('text')
     .attr('class', 'clabel').text(q => q.p.name)
     .attr('x', q => proj([q.p.lon, q.p.lat])[0]).attr('y', q => proj([q.p.lon, q.p.lat])[1]);
 
@@ -1473,10 +1485,12 @@ function monthGrid(year, m){
     <div class="days">${cells}</div></div>`;
 }
 function updateCalSum(){
-  const { start, end } = calState;
-  const n = start && end ? Math.round((dt(end) - dt(start)) / 864e5) + 1 : 0;
+  const { start } = calState;
+  const end = calState.end || start;
+  const n = start ? Math.round((dt(end) - dt(start)) / 864e5) + 1 : 0;
   document.getElementById('calSum').textContent = start
     ? `${span(start, end)} · ${n} ${n === 1 ? 'dag' : 'dagar'}`
+      + (calState.end ? '' : ' · välj sista dagen, eller tryck Klar')
     : 'Välj första dagen';
   document.getElementById('calDone').disabled = !start;
 }
