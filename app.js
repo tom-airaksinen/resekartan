@@ -572,12 +572,16 @@ const tripRow = t => {
     <span><b>${esc(t.title)}${t.planned ? '<span class="tag">Planerad</span>' : ''}${extra ? `<span class="tag side">+ ${esc(extra)}</span>` : ''}</b><small>${span(t.start, t.end)}</small></span>
     ${avs(t.who)}</button>`;
 };
-const statTiles = (s, cls = 'stats') => `<div class="${cls}">
-  <div class="stat"><div class="num">${s.countries}</div><span>besökta länder</span></div>
+/* Fyra tal på en rad. Etiketterna är korta i arket där de ska rymmas bredvid
+   varandra, och utskrivna i statistikvyn där det finns plats. */
+const statTiles = (s, cls = 'stats') => {
+  const long = cls !== 'stats';
+  return `<div class="${cls}">
+  <div class="stat"><div class="num">${s.countries}</div><span>${long ? 'besökta länder' : 'länder'}</span></div>
   <div class="stat"><div class="num">${s.places}</div><span>platser</span></div>
   <div class="stat"><div class="num">${s.trips}</div><span>resor</span></div>
-  <div class="stat"><div class="num">${s.days}</div><span>dagar på resande fot</span></div>
-  <div class="stat"><div class="num">${filter ? 1 : family().length}</div><span>${filter ? 'resenär' : 'familjemedlemmar'}</span></div></div>`;
+  <div class="stat"><div class="num">${s.days}</div><span>${long ? 'dagar på resande fot' : 'resdagar'}</span></div></div>`;
+};
 const seedNote = () => (usingSeed() && !CLOUD.on)
   ? '<p class="example">Exempeldata. Lägg in era egna resor under Resor → Ny resa.</p>' : '';
 
