@@ -5,11 +5,11 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Klistra in familjens uid här (Firebase-konsolen → Authentication → Users).
-    // Tills listan är ifylld släpps ingen in.
+    // Familjens konton (Firebase-konsolen → Authentication → Users).
+    // Lägg till fler uid i listan om någon ska få ett eget konto.
     function familjen() {
       return [
-        'KLISTRA_IN_UID_HAR'
+        'NIek1TuzPkam53vMTkh4h8LbQjP2'
       ];
     }
 
