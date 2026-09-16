@@ -455,7 +455,7 @@ const CONTINENTS = [
   ['Afrika', 6, 20], ['Asien', 45, 90], ['Oceanien', -25, 134]
 ];
 
-const zoom = d3.zoom().scaleExtent([1, 400])
+const zoom = d3.zoom().scaleExtent([1, 1500])
   .on('zoom', e => { k = e.transform.k; gWorld.attr('transform', e.transform); rescale(); });
 svg.call(zoom).on('dblclick.zoom', null);
 
@@ -607,7 +607,7 @@ function flyTo(t){
   const pts = t.stops.flatMap(s => (s.places || []).map(p => proj([p.lon, p.lat])));
   if(!pts.length) return;
   fitBox(d3.min(pts, p => p[0]), d3.min(pts, p => p[1]),
-         d3.max(pts, p => p[0]), d3.max(pts, p => p[1]), 60, .6);
+         d3.max(pts, p => p[0]), d3.max(pts, p => p[1]), 250, .6);
 }
 // Rutan en landvy ska fylla: hela landet plus platserna vi varit på i det.
 // Vi mäter landets STÖRSTA landmassa – annars drar Alaska ut hela USA-vyn.
@@ -642,7 +642,7 @@ function flyToCountry(iso){
   // Marginalen måste vara proportionell – ett fast px-tal dränker ett litet land
   const w = b[2] - b[0], h = b[3] - b[1];
   const mx = w > .5 ? w * .08 : 6, my = h > .5 ? h * .08 : 6;
-  fitBox(b[0] - mx, b[1] - my, b[2] + mx, b[3] + my, 90, .85);
+  fitBox(b[0] - mx, b[1] - my, b[2] + mx, b[3] + my, 150, .85);
 }
 function resetZoom(){ ease(svg).call(zoom.transform, d3.zoomIdentity); }
 function clearSel(){
@@ -1837,9 +1837,35 @@ const DATE_RULES = [
     m => { const y = +m[2], M = monOf(m[1]); return [ymdParts(y, M, 1), ymdParts(y, M, new Date(y, M + 1, 0).getDate())]; }]
 ];
 
+/* Deltagare som initialer sist i namnet: "... -TA" = Tom och Aron.
+   Familjen går före gäster; är en bokstav tvetydig bland gästerna hoppas den över.
+   Matchar inte alla bokstäver någon person lämnas raden orörd – då var det
+   förmodligen inte deltagare utan en del av titeln. */
+function parseWho(tail){
+  const letters = tail.toUpperCase().split('');
+  const ids = [];
+  for(const ch of letters){
+    const fam = family().filter(p => p.name[0].toUpperCase() === ch);
+    if(fam.length === 1){ ids.push(fam[0].id); continue; }
+    const g = guests().filter(p => p.name[0].toUpperCase() === ch);
+    if(g.length === 1){ ids.push(g[0].id); continue; }
+    return null;                       // okänd eller tvetydig bokstav
+  }
+  return ids.length ? [...new Set(ids)] : null;
+}
+
 function parseAlbum(line){
-  const s = String(line).trim().replace(/\s+/g, ' ');
+  let s = String(line).trim().replace(/\s+/g, ' ');
   if(!s) return null;
+
+  // Deltagare sist: "-TA" eller "-T A"
+  let who = null;
+  const wm = s.match(/[-–—]\s*([A-Za-zÅÄÖåäö]{1,6})\s*$/);
+  if(wm){
+    const ids = parseWho(wm[1].replace(/\s+/g, ''));
+    if(ids){ who = ids; s = s.slice(0, wm.index).trim(); }
+  }
+
   let start = null, end = null, used = '', yearOnly = false;
   for(const [re, fn] of DATE_RULES){
     const m = s.match(re);
@@ -1849,13 +1875,31 @@ function parseAlbum(line){
     const m = s.match(/(?:^|\s)((?:19|20)\d{2})(?:\s|$)/);
     if(m){ const y = +m[1]; start = `${y}-01-01`; end = `${y}-12-31`; used = m[1]; yearOnly = true; }
   }
-  const title = (used ? s.replace(used, ' ') : s)
+
+  let rest = (used ? s.replace(used, ' ') : s)
     .replace(/\b(v\.?\s*\d+|vecka\s*\d+)\b/ig, ' ')
-    .replace(/[,;|]/g, ' ')
     .replace(/\s+/g, ' ')
     .replace(/^[\s-–—]+|[\s-–—]+$/g, '')
     .trim();
-  return { line: s, title, start, end, yearOnly, hasDate: !!used && !yearOnly };
+
+  // Orter i parentes eller efter kolon: "Kalifornien (San Diego, Los Angeles)"
+  let title = rest, names = [];
+  const pm = rest.match(/^(.*?)\s*[\(\[]([^)\]]+)[\)\]]\s*(.*)$/);
+  const cm = rest.match(/^([^:]+):\s*(.+)$/);
+  if(pm){
+    title = (pm[1] + ' ' + pm[3]).replace(/\s+/g, ' ').trim();
+    names = pm[2].split(/[,;/]|\soch\s/);
+  } else if(cm){
+    title = cm[1].trim();
+    names = cm[2].split(/[,;/]|\soch\s/);
+  } else {
+    names = [rest];
+  }
+  names = names.map(x => x.replace(/[,;|]/g, ' ').replace(/\s+/g, ' ').trim()).filter(Boolean);
+  title = title.replace(/[,;|]/g, ' ').replace(/\s+/g, ' ').trim() || names[0] || rest;
+
+  return { line: String(line).trim(), title, names, who,
+           start, end, yearOnly, hasDate: !!used && !yearOnly };
 }
 
 const importer = document.getElementById('importer');
@@ -1881,12 +1925,28 @@ function renderImport(){
   if(imStep === 'paste'){
     imBody.innerHTML = `
       <p class="subtle">Klistra in namnen på dina resealbum, ett per rad. Appen läser ut
-      datum ur namnet och slår upp orten på kartan.</p>
+      datum ur namnet och slår upp orterna på kartan.</p>
       <div class="field"><textarea id="imText" spellcheck="false" placeholder="Wroclaw 1-4 juni 2023
-Rom 12–15 mars 2024
-New York 24 dec 2018 - 2 jan 2019
+Kalifornien (San Diego, Los Angeles) 12-27 jun 2025
+Hamburg 1-3 maj 2026 -TA
 Sommar i Grekland juli 2022"></textarea></div>
-      <p class="hint">Rader utan datum går också bra – de hamnar längst ned och får datum du fyller i själv.</p>`;
+      <div class="imhelp">
+        <p><b>Datum</b> läses var som helst i namnet:<br>
+          <code>1-4 juni 2023</code> · <code>28 juni - 3 juli 2024</code> ·
+          <code>24 dec 2018 - 2 jan 2019</code> · <code>14 sep 2025</code> ·
+          <code>juli 2022</code> (hela månaden) · <code>2023-05-03</code> · bara årtal</p>
+        <p><b>Flera orter</b> inom parentes eller efter kolon:<br>
+          <code>Kalifornien (San Diego, Los Angeles)</code> ·
+          <code>Italien: Rom, Formia</code><br>
+          Utan parentes tolkas hela namnet som en enda ort.</p>
+        <p><b>Vilka som var med</b> anges med initialer sist, efter ett bindestreck:<br>
+          ${family().map(p => `<code>${esc(p.name[0].toUpperCase())}</code> ${esc(p.name)}`).join(' · ')}<br>
+          <code>Hamburg 1-3 maj 2026 -TA</code> blir en resa med ${
+            family().slice(0, 1).map(p => esc(p.name)).join('')} och ${
+            family().slice(2, 3).map(p => esc(p.name)).join('') || 'Aron'}.
+          Utan suffix räknas hela familjen.</p>
+        <p>Rader utan datum går också bra – de hamnar längst ned och får datum du fyller i själv.</p>
+      </div>`;
     return;
   }
 
@@ -1895,18 +1955,20 @@ Sommar i Grekland juli 2022"></textarea></div>
     <p class="imsum">${imRows.length} rader · ${ok} valda${
       imRows.some(r => r.pending) ? ' <span class="spin"></span> slår upp orter …' : ''}</p>
     <div>${imRows.map((r, i) => {
-      const bad = !r.place;
+      const bad = !r.places.length;
       return `<label class="imrow${bad ? ' bad' : ''}">
         <input type="checkbox" data-im="${i}" ${r.use ? 'checked' : ''} ${bad ? 'disabled' : ''}>
         <span>
-          <span class="who">${r.place ? flagOf(r.iso) + ' ' : ''}${esc(r.title || r.line)}${
+          <span class="who">${r.places.length ? flagOf(r.iso) + ' ' : ''}${esc(r.title || r.line)}${
             r.yearOnly ? '<span class="imbadge warn">bara år</span>' : ''}${
-            !r.hasDate && !r.yearOnly ? '<span class="imbadge warn">inget datum</span>' : ''}${
-            r.planned ? '<span class="imbadge">planerad</span>' : ''}</span>
+            !r.hasDate && !r.yearOnly ? '<span class="imbadge warn">inget datum</span>' : ''}</span>
           <span class="src">${esc(r.line)}</span>
           <span class="meta2">${r.pending ? 'slår upp …'
-            : r.place ? `${esc(r.place.name)}, ${esc(countryName(r.iso))} · ${span(r.start, r.end)}`
-            : 'Hittade ingen ort med det namnet – lägg in den för hand i stället.'}</span>
+            : r.places.length
+              ? `${r.places.map(p => esc(p.name)).join(', ')} · ${esc(countryName(r.iso))} · ${span(r.start, r.end)}`
+                + (r.who ? ' · ' + r.who.map(personName).join(', ') : '')
+                + (r.missing?.length ? ` · hittade inte ${r.missing.map(esc).join(', ')}` : '')
+              : `Hittade ingen ort${r.names.length > 1 ? 'erna' : ' med det namnet'} – lägg in för hand i stället.`}</span>
         </span>
       </span></label>`;
     }).join('')}</div>`;
@@ -1932,7 +1994,7 @@ document.getElementById('imNext').onclick = async () => {
     const lines = document.getElementById('imText').value.split('\n').map(x => x.trim()).filter(Boolean);
     if(!lines.length){ err.textContent = 'Klistra in minst en rad.'; err.hidden = false; return; }
     if(lines.length > 200){ err.textContent = 'Max 200 rader åt gången.'; err.hidden = false; return; }
-    imRows = lines.map(parseAlbum).filter(Boolean).map(r => ({ ...r, use: false, place: null, iso: null, pending: true }));
+    imRows = lines.map(parseAlbum).filter(Boolean).map(r => ({ ...r, use: false, places: [], iso: null, pending: true }));
     // Rader utan datum sist – de behöver ändå handpåläggning
     imRows.sort((a, b) => (b.start || '').localeCompare(a.start || ''));
     imStep = 'review';
@@ -1941,18 +2003,18 @@ document.getElementById('imNext').onclick = async () => {
     return;
   }
   // Spara
-  const chosen = imRows.filter(r => r.use && r.place);
+  const chosen = imRows.filter(r => r.use && r.places.length);
   if(!chosen.length){ err.textContent = 'Kryssa i minst en resa.'; err.hidden = false; return; }
   const today = new Date().toISOString().slice(0, 10);
   chosen.forEach(r => {
     DB.trips.push({
       id: 't' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
-      title: r.title || r.place.name,
+      title: r.title || r.places[0].name,
       start: r.start, end: r.end,
-      who: family().map(p => p.id),
+      who: r.who && r.who.length ? r.who : family().map(p => p.id),
       planned: r.start > today,
       note: '',
-      stops: [{ iso: r.iso, places: [{ name: r.place.name, lat: r.place.lat, lon: r.place.lon, what: '' }] }]
+      stops: [{ iso: r.iso, places: r.places.map(p => ({ name: p.name, lat: p.lat, lon: p.lon, what: '' })) }]
     });
   });
   saveDB();
@@ -1964,21 +2026,28 @@ document.getElementById('imNext').onclick = async () => {
 /* Slå upp en rad i taget – geokodarna är gratis och ska inte översvämmas */
 async function lookupRows(){
   for(const r of imRows){
-    const q = (r.title || '').trim();
-    if(!q){ r.pending = false; continue; }
-    try {
-      const hits = await geocode(q, '');
-      const hit = hits[0];
-      if(hit){
-        r.place = { name: hit.name, lat: hit.lat, lon: hit.lon };
-        r.iso = isoFromCC(hit.cc) || await isoByPosition(hit);
-        if(!r.iso){ r.place = null; }
-        else if(r.hasDate) r.use = true;         // säkra rader är förkryssade
-      }
-    } catch(e){}
+    r.missing = [];
+    const queries = (r.names && r.names.length ? r.names : [r.title]).filter(Boolean);
+    for(const q of queries){
+      try {
+        // Är landet redan känt från en tidigare ort på raden, sök inom det
+        const hits = await geocode(q, r.iso ? (ISO[r.iso]?.[0] || '').toLowerCase() : '');
+        const hit = hits[0];
+        if(hit){
+          const iso = isoFromCC(hit.cc) || isoByPosition(hit);
+          if(iso){
+            r.iso ??= iso;
+            r.places.push({ name: hit.name, lat: hit.lat, lon: hit.lon });
+          } else r.missing.push(q);
+        } else r.missing.push(q);
+      } catch(e){ r.missing.push(q); }
+      renderImport();
+      await new Promise(res => setTimeout(res, 1100));   // Nominatim: max 1/sek
+    }
+    // Förkryssa bara rader som blev kompletta
+    if(r.places.length && r.hasDate && !r.missing.length) r.use = true;
     r.pending = false;
     renderImport();
-    await new Promise(res => setTimeout(res, 1100));   // Nominatim: max 1/sek
   }
   renderImport();
 }
@@ -1987,7 +2056,7 @@ const CC2ISO = Object.fromEntries(Object.entries(ISO).map(([num, v]) => [v[0].to
 const isoFromCC = cc => cc ? CC2ISO[cc.toLowerCase()] || null : null;
 
 // Photon svarar inte alltid med landskod – fall tillbaka på var punkten hamnar
-async function isoByPosition(hit){
+function isoByPosition(hit){
   const pt = [hit.lon, hit.lat];
   const f = world.features.find(ft => d3.geoContains(ft, pt));
   return f ? f.id : null;
