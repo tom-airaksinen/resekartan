@@ -112,10 +112,19 @@ _(fylls på)_
 - **Service workern hämtar sidan nätverket först**, så ingen fastnar i en gammal
   version efter att ha sparat appen på hemskärmen.
 
+## Steg 8 (2026-09-16) – dragbart ark och bilder
+
+- **Arket går att dra.** Handtaget såg ut att kunna dras men gjorde bara en toggle.
+  Nu dras det fritt och snäpper till fyra lägen, så man kan trycka undan det och
+  utforska kartan under – särskilt i landvyn.
+- **Bilder per resa.** Galleri i resedetaljen, helskärmsvisning med svep, och
+  nedskalning i webbläsaren så varje bild landar på ett par hundra kB. Ligger i en
+  egen subcollection, inte i huvuddokumentet.
+
 ## Senare – inte version 1
 
 Version 1 ska vara väldigt enkel, men datamodellen ska inte stänga dörren för detta.
 
-- **Foton per resa.** Antingen länkar (t.ex. Google Foto) eller uppladdning. I resans
-  detaljvy grupperas de per person – "Toms bilder", "Karins bilder", "Arons bilder",
-  "Hedvigs bilder" – några favoriter var, så man ser allas bästa bilder från resan.
+- **Foton per resa.** ~~Grupperade per person~~ – byggt 2026-09-16 som ett gemensamt
+  galleri per resa i stället; familjen delar konto och det spelade mindre roll vem
+  som laddat upp vad. Nästa steg är att kunna knyta en bild till en enskild ort.

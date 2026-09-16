@@ -73,8 +73,21 @@ Efter det syns ändringar direkt på alla enheter.
 
 ## Hur datat ligger
 
-Allt ligger i ett dokument, `resekartan/data`, som en JSON-sträng i fältet
+Resorna ligger i ett dokument, `resekartan/data`, som en JSON-sträng i fältet
 `payload`, plus `updatedAt` och `updatedBy`.
+
+**Bilderna ligger för sig**, i subcollectionen `resekartan/data/foton`, ett
+dokument per bild. De skulle spränga huvuddokumentets gräns annars. Varje bild
+skalas ned till max 1400 px och komprimeras i webbläsaren innan den sparas, så
+den landar på ett par hundra kB. Firestores gratisnivå på 1 GiB räcker till
+tusentals bilder.
+
+Fältet `place` är tomt men finns med, så bilder kan knytas till en enskild ort
+längre fram utan att det som redan ligger inne behöver skrivas om.
+
+> **Har du redan publicerat reglerna?** Då måste de uppdateras en gång till –
+> den tidigare versionen matchade bara `resekartan/data` och släpper inte in
+> bilderna. Regeln matchar nu `resekartan/{document=**}`.
 
 Ett dokument gör varje sparning atomär och håller koden enkel. För en familj är
 det några tiotal kB, långt under Firestores gräns på 1 MB. Baksidan: sparar två

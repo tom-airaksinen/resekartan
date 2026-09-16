@@ -333,6 +333,112 @@ function stats(list){
   return { countries: countries.size, places: places.size, trips: l.length, days: dd };
 }
 
+/* ============================ Bilder ============================
+   Bilderna ligger för sig, inte i huvuddokumentet – det skulle spränga
+   Firestores gräns på 1 MB per dokument. Molnläge: subcollection
+   resekartan/data/foton. Lokalt: IndexedDB, som till skillnad från
+   localStorage klarar hundratals megabyte.
+
+   Varje bild skalas ned i webbläsaren innan den sparas. `place` är tomt än så
+   länge men finns med, så bilder kan knytas till en enskild ort längre fram
+   utan att det som redan ligger inne behöver skrivas om. */
+const PH_MAX_SIDE = 1400, PH_BUDGET = 700 * 1024;
+
+function idb(){
+  return new Promise((res, rej) => {
+    const r = indexedDB.open('resekartan-foton', 1);
+    r.onupgradeneeded = () => {
+      const db = r.result;
+      if(!db.objectStoreNames.contains('foton')){
+        db.createObjectStore('foton', { keyPath: 'id' }).createIndex('tripId', 'tripId');
+      }
+    };
+    r.onsuccess = () => res(r.result);
+    r.onerror = () => rej(r.error);
+  });
+}
+async function idbAll(tripId){
+  const db = await idb();
+  return new Promise((res, rej) => {
+    const tx = db.transaction('foton').objectStore('foton').index('tripId').getAll(tripId);
+    tx.onsuccess = () => res(tx.result || []);
+    tx.onerror = () => rej(tx.error);
+  });
+}
+async function idbPut(rec){
+  const db = await idb();
+  return new Promise((res, rej) => {
+    const tx = db.transaction('foton', 'readwrite').objectStore('foton').put(rec);
+    tx.onsuccess = () => res();
+    tx.onerror = () => rej(tx.error);
+  });
+}
+async function idbDel(id){
+  const db = await idb();
+  return new Promise((res, rej) => {
+    const tx = db.transaction('foton', 'readwrite').objectStore('foton').delete(id);
+    tx.onsuccess = () => res();
+    tx.onerror = () => rej(tx.error);
+  });
+}
+
+const photoId = () => 'p' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+
+/* Skala ned och komprimera tills bilden ryms i ett Firestore-dokument */
+async function shrink(file){
+  const bmp = await createImageBitmap(file).catch(() => null);
+  if(!bmp) throw new Error('Kunde inte läsa bilden.');
+  const scale = Math.min(1, PH_MAX_SIDE / Math.max(bmp.width, bmp.height));
+  const w = Math.round(bmp.width * scale), h = Math.round(bmp.height * scale);
+  const cv = document.createElement('canvas');
+  cv.width = w; cv.height = h;
+  cv.getContext('2d').drawImage(bmp, 0, 0, w, h);
+  bmp.close?.();
+  let q = .72, url = cv.toDataURL('image/jpeg', q);
+  while(url.length > PH_BUDGET && q > .35){ q -= .12; url = cv.toDataURL('image/jpeg', q); }
+  if(url.length > PH_BUDGET){
+    const cv2 = document.createElement('canvas');
+    cv2.width = Math.round(w * .7); cv2.height = Math.round(h * .7);
+    cv2.getContext('2d').drawImage(cv, 0, 0, cv2.width, cv2.height);
+    url = cv2.toDataURL('image/jpeg', .6);
+  }
+  return { url, w, h };
+}
+
+const photos = {
+  async list(tripId){
+    if(CLOUD.on){
+      const { store } = CLOUD.mod;
+      const col = store.collection(CLOUD.db, 'resekartan', 'data', 'foton');
+      const snap = await store.getDocs(store.query(col, store.where('tripId', '==', tripId)));
+      return snap.docs.map(d => ({ id: d.id, ...d.data() }))
+        .sort((a, b) => (a.addedAt || '').localeCompare(b.addedAt || ''));
+    }
+    return (await idbAll(tripId)).sort((a, b) => (a.addedAt || '').localeCompare(b.addedAt || ''));
+  },
+  async add(tripId, file){
+    const { url, w, h } = await shrink(file);
+    const rec = { id: photoId(), tripId, place: null, url, w, h,
+                  addedAt: new Date().toISOString(), addedBy: CLOUD.user?.email || null };
+    if(CLOUD.on){
+      const { store } = CLOUD.mod;
+      const { id, ...data } = rec;
+      await store.setDoc(store.doc(CLOUD.db, 'resekartan', 'data', 'foton', id), data);
+    } else {
+      await idbPut(rec);
+    }
+    return rec;
+  },
+  async remove(id){
+    if(CLOUD.on){
+      const { store } = CLOUD.mod;
+      await store.deleteDoc(store.doc(CLOUD.db, 'resekartan', 'data', 'foton', id));
+    } else {
+      await idbDel(id);
+    }
+  }
+};
+
 /* ============================ Kartan ============================ */
 const svg = d3.select('#map'), gWorld = d3.select('#world');
 const world = topojson.feature(WORLD, WORLD.objects.countries);
@@ -485,11 +591,8 @@ function paint(){
 
 function mapView(){
   if(window.innerWidth >= 900) return { top: 0, h: H };
-  const sheet = document.getElementById('sheet');
-  const frac = sheet.classList.contains('open') ? .88
-             : sheet.classList.contains('detail') ? .70
-             : sheet.classList.contains('country') ? .52 : .44;
-  return { top: 108, h: Math.max(90, H * (1 - frac) - 118) };
+  const bottom = sheet.getBoundingClientRect().height || H * sheetFrac;
+  return { top: 108, h: Math.max(90, H - bottom - 118) };
 }
 function fitBox(x0, y0, x1, y1, maxK, fill){
   const v = mapView();
@@ -562,7 +665,68 @@ document.getElementById('who').addEventListener('click', e => {
 
 /* ============================ Bottenark ============================ */
 const sheet = document.getElementById('sheet'), body = document.getElementById('sheetBody');
-document.getElementById('handle').onclick = () => sheet.classList.toggle('open');
+
+/* ---- Dragbart ark ----
+   Handtaget såg ut att gå att dra men gjorde bara en toggle. Nu går arket att
+   dra fritt och snäpper till närmaste läge, så man kan trycka undan det och
+   utforska kartan under. */
+const SNAPS = [.26, .5, .72, .9];
+let sheetFrac = .5;
+
+function setSheet(frac, animate = true){
+  if(window.innerWidth >= 900) return;           // på desktop är arket en fast panel
+  sheetFrac = Math.min(.92, Math.max(.16, frac));
+  sheet.classList.toggle('dragging', !animate);
+  sheet.style.height = (sheetFrac * 100) + '%';
+}
+const snapTo = frac => SNAPS.reduce((a, b) => Math.abs(b - frac) < Math.abs(a - frac) ? b : a);
+
+const handle = document.getElementById('handle');
+let drag = null;
+handle.addEventListener('pointerdown', e => {
+  if(window.innerWidth >= 900) return;
+  drag = { y: e.clientY, start: sheetFrac, moved: false, t: Date.now() };
+  handle.setPointerCapture(e.pointerId);
+});
+handle.addEventListener('pointermove', e => {
+  if(!drag) return;
+  const dy = e.clientY - drag.y;
+  if(Math.abs(dy) > 3) drag.moved = true;
+  setSheet(drag.start - dy / H, false);
+});
+function endDrag(e){
+  if(!drag) return;
+  const quick = Date.now() - drag.t < 250;
+  const dy = e.clientY - drag.y;
+  let target;
+  if(drag.moved && quick && Math.abs(dy) > 24){
+    // Snärt: hoppa ett steg i svepets riktning
+    const i = SNAPS.indexOf(snapTo(drag.start));
+    target = SNAPS[Math.min(SNAPS.length - 1, Math.max(0, i + (dy < 0 ? 1 : -1)))];
+  } else if(drag.moved){
+    target = snapTo(sheetFrac);
+  } else {
+    // Rent tryck: växla mellan hopfällt och det läge vyn utgår från
+    target = sheetFrac > .35 ? SNAPS[0] : defaultFrac();
+  }
+  drag = null;
+  setSheet(target, true);
+  try { handle.releasePointerCapture(e.pointerId); } catch(err){}
+}
+handle.addEventListener('pointerup', endDrag);
+handle.addEventListener('pointercancel', endDrag);
+handle.addEventListener('keydown', e => {
+  const i = SNAPS.indexOf(snapTo(sheetFrac));
+  if(e.key === 'ArrowUp'){ e.preventDefault(); setSheet(SNAPS[Math.min(SNAPS.length - 1, i + 1)]); }
+  if(e.key === 'ArrowDown'){ e.preventDefault(); setSheet(SNAPS[Math.max(0, i - 1)]); }
+});
+
+// Utgångshöjd per vy: kartan får mest plats där den är poängen
+function defaultFrac(){
+  if(sheet.classList.contains('detail')) return .72;
+  if(sheet.classList.contains('country')) return .5;
+  return .5;
+}
 
 const tripRow = t => {
   const first = t.stops[0];
@@ -587,6 +751,7 @@ const seedNote = () => (usingSeed() && !CLOUD.on)
 
 function renderSheet(){
   sheet.classList.remove('detail', 'country');
+  setSheet(.5);
   if(sel){ const t = DB.trips.find(x => x.id === sel); if(t) return renderTrip(t); sel = null; }
   if(selCountry) return renderCountry(selCountry);
   const list = visible(), sorted = [...list].sort(byDateDesc);
@@ -606,7 +771,8 @@ const ICON = {
 };
 
 function renderTrip(t){
-  sheet.classList.add('detail'); sheet.classList.remove('open', 'country');
+  sheet.classList.add('detail'); sheet.classList.remove('country');
+  setSheet(.72);
   const stopRow = s => `<div class="stop${s.side ? ' side' : ''}"><span class="flag">${flagOf(s.iso)}</span>
     <b>${esc(countryName(s.iso))}${s.side ? '<span class="tag side">Avstickare</span>' : ''}</b>
     <small>${(s.places||[]).map(p => esc(p.name)).join(', ')}${s.start ? ` · ${span(s.start, s.end)}` : ''}${s.who?.length ? ` · ${s.who.map(personName).join(' och ')}` : ''}</small></div>`;
@@ -625,12 +791,142 @@ function renderTrip(t){
       <button class="btn" data-edit="${esc(t.id)}">Ändra resa</button>
       <button class="btn danger" data-del="${esc(t.id)}">Ta bort</button>
     </div>
-    <div class="photos">Bilder från resan kommer i en senare version – några favoriter var från ${(t.who||[]).map(personName).join(', ') || 'var och en som var med'}.</div>
+    <div class="photos" id="photos" data-tripid="${esc(t.id)}">
+      <h3>Bilder <span class="cnt" id="phCnt"></span></h3>
+      <div id="phBody"><p class="ph-busy"><span class="spin"></span>Hämtar bilder …</p></div>
+    </div>
   </div>`;
+  loadPhotos(t.id);
 }
 
+/* ---- Galleri ---- */
+let phCache = [], phTrip = null;
+
+const addTile = `<button type="button" class="addph" id="phAdd">
+  <svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="15" rx="2.5"/><path d="M3 16l5-5 4 4 3-3 6 6M12 2v6M9 5h6"/></svg>
+  Lägg till</button>`;
+
+function renderPhotos(){
+  const box = document.getElementById('phBody');
+  if(!box) return;
+  const cnt = document.getElementById('phCnt');
+  if(cnt) cnt.textContent = phCache.length ? `${phCache.length} ${phCache.length === 1 ? 'bild' : 'bilder'}` : '';
+  box.innerHTML = `<div class="grid-ph">${addTile}${phCache.map((p, i) =>
+    `<figure><img src="${p.url}" alt="Bild ${i + 1} från resan" loading="lazy" data-open="${i}">
+      <button type="button" class="rm" data-rm="${esc(p.id)}" aria-label="Ta bort bilden">
+        <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></figure>`).join('')}</div>
+    ${phCache.length ? '' : '<p class="hint">Lägg till några favoriter från resan. Bilderna krymps innan de sparas, så de tar liten plats.</p>'}`;
+}
+
+async function loadPhotos(tripId){
+  phTrip = tripId; phCache = [];
+  try {
+    // Lagringen kan tiga still (blockerad IndexedDB i privat läge, nätet borta).
+    // Då ska vyn visa något användbart i stället för att stå kvar på "Hämtar …".
+    const list = await Promise.race([
+      photos.list(tripId),
+      new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 9000))
+    ]);
+    if(phTrip !== tripId) return;                 // användaren hann byta resa
+    phCache = list;
+    renderPhotos();
+  } catch(e){
+    const box = document.getElementById('phBody');
+    if(box) box.innerHTML = `<p class="ph-empty">${
+      e.code === 'permission-denied'
+        ? 'Firestore-reglerna släpper inte in bilderna än. Uppdatera reglerna enligt docs/firebase.md.'
+        : e.message === 'timeout'
+          ? 'Bildlagringen svarar inte. Prova att ladda om.'
+          : 'Kunde inte hämta bilderna.'
+    }</p><div class="grid-ph" style="margin-top:8px">${addTile}</div>`;
+  }
+}
+
+const phInput = document.getElementById('phInput');
+document.addEventListener('click', e => {
+  if(e.target.closest('#phAdd')){ phInput.value = ''; phInput.click(); return; }
+  const open = e.target.closest('[data-open]');
+  if(open){ openViewer(+open.dataset.open); return; }
+  const rm = e.target.closest('[data-rm]');
+  if(rm){ removePhoto(rm.dataset.rm); return; }
+});
+
+phInput.addEventListener('change', async () => {
+  const files = [...phInput.files].filter(f => f.type.startsWith('image/'));
+  if(!files.length || !phTrip) return;
+  const box = document.getElementById('phBody');
+  const tripAtStart = phTrip;
+  let done = 0, failed = 0;
+  const say = () => {
+    const el = document.getElementById('phProgress');
+    if(el) el.textContent = `Lägger till bild ${done + 1} av ${files.length} …`;
+  };
+  if(box) box.insertAdjacentHTML('afterbegin',
+    `<p class="ph-busy"><span class="spin"></span><span id="phProgress">Lägger till bild 1 av ${files.length} …</span></p>`);
+  for(const f of files){
+    say();
+    try {
+      const rec = await photos.add(tripAtStart, f);
+      if(phTrip === tripAtStart) phCache.push(rec);
+    } catch(err){ failed++; }
+    done++;
+  }
+  if(phTrip === tripAtStart) renderPhotos();
+  toast(failed
+    ? `${done - failed} av ${files.length} bilder tillagda, ${failed} misslyckades.`
+    : `${done} ${done === 1 ? 'bild' : 'bilder'} tillagda.`);
+});
+
+async function removePhoto(id){
+  if(!await ask('Ta bort bilden?', 'Ta bort')) return;
+  try {
+    await photos.remove(id);
+    phCache = phCache.filter(p => p.id !== id);
+    renderPhotos();
+    if(!viewerEl.hidden) closeViewer();
+    toast('Bilden är borttagen.');
+  } catch(e){ toast('Kunde inte ta bort bilden.'); }
+}
+
+/* ---- Helskärmsvisning ---- */
+const viewerEl = document.getElementById('viewer');
+let vIdx = 0;
+function openViewer(i){
+  if(!phCache[i]) return;
+  vIdx = i; viewerEl.hidden = false; paintViewer();
+}
+function closeViewer(){ viewerEl.hidden = true; }
+function paintViewer(){
+  const p = phCache[vIdx];
+  if(!p) return closeViewer();
+  document.getElementById('vImg').src = p.url;
+  document.getElementById('vCount').textContent = `${vIdx + 1} / ${phCache.length}`;
+  document.getElementById('vPrev').disabled = vIdx === 0;
+  document.getElementById('vNext').disabled = vIdx >= phCache.length - 1;
+}
+const step = d => { vIdx = Math.min(phCache.length - 1, Math.max(0, vIdx + d)); paintViewer(); };
+document.getElementById('vClose').onclick = closeViewer;
+document.getElementById('vPrev').onclick = () => step(-1);
+document.getElementById('vNext').onclick = () => step(1);
+document.getElementById('vDel').onclick = () => removePhoto(phCache[vIdx]?.id);
+addEventListener('keydown', e => {
+  if(viewerEl.hidden) return;
+  if(e.key === 'Escape') closeViewer();
+  if(e.key === 'ArrowLeft') step(-1);
+  if(e.key === 'ArrowRight') step(1);
+});
+// Svep i sidled
+let vx = null;
+viewerEl.addEventListener('pointerdown', e => { vx = e.clientX; });
+viewerEl.addEventListener('pointerup', e => {
+  if(vx === null) return;
+  const dx = e.clientX - vx; vx = null;
+  if(Math.abs(dx) > 50) step(dx < 0 ? 1 : -1);
+});
+
 function renderCountry(iso){
-  sheet.classList.add('country'); sheet.classList.remove('open', 'detail');
+  sheet.classList.add('country'); sheet.classList.remove('detail');
+  setSheet(.5);
   const home = isHome(iso), groups = stopsIn(iso);
   const places = new Set();
   groups.forEach(({ st }) => (st.places||[]).forEach(p => places.add(p.name)));
@@ -679,6 +975,8 @@ async function removeTrip(id){
   if(!editor.hidden) closeEditor();
   refreshAll();
   toast('Resan är borttagen.');
+  // Bilderna hör till resan och ska inte bli kvar som skräp
+  try { (await photos.list(id)).forEach(p => photos.remove(p.id)); } catch(e){}
 }
 
 /* ============================ Vyer ============================ */
