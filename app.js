@@ -800,7 +800,10 @@ function renderSettings(){
     <textarea class="codebox" id="hashOut" spellcheck="false" hidden aria-label="Ny hash-rad"></textarea>`}
 
     <h2 class="sec">Den här enheten</h2>
-    <button class="btn ghost" id="logout">Logga ut</button>
+    <div class="actions" style="margin-top:0">
+      <button class="btn ghost" id="logout">Logga ut</button>
+      <button class="btn ghost" id="refreshApp">Hämta senaste versionen</button>
+    </div>
     <p class="hint">${useCloud() ? 'Loggar ut från familjens konto på den här enheten.' : 'Låser appen igen på den här enheten.'}</p>
     <p class="example">Kartdata: Natural Earth 1:50m via world-atlas (public domain).</p>`;
   const dump = document.getElementById('dump');
@@ -836,6 +839,17 @@ document.getElementById('view-settings').addEventListener('click', e => {
 
 document.addEventListener('click', async e => {
   const id = e.target.id;
+  if(id === 'refreshApp'){
+    toast('Hämtar senaste versionen …');
+    try {
+      const keys = await caches.keys();
+      await Promise.all(keys.map(k => caches.delete(k)));
+      const regs = await navigator.serviceWorker?.getRegistrations?.() || [];
+      await Promise.all(regs.map(r => r.unregister()));
+    } catch(err){}
+    setTimeout(() => location.reload(), 600);
+    return;
+  }
   if(id === 'addPerson'){
     const inp = document.getElementById('newPerson'), name = inp.value.trim();
     if(!name) return;
@@ -1091,23 +1105,34 @@ function openCal(start, end, title, apply){
 }
 function closeCal(){ calEl.hidden = true; calState = null; }
 
-function renderCal(focusMonth){
-  const now = new Date().getFullYear();
-  const years = [];
+function renderYears(scrollTo){
+  const now = new Date().getFullYear(), years = [];
   for(let y = now + 2; y >= now - 40; y--) years.push(y);
   document.getElementById('calYears').innerHTML = years.map(y =>
     `<button type="button" data-year="${y}" aria-pressed="${y === calState.year}">${y}</button>`).join('');
-
-  const first = focusMonth != null ? focusMonth : 0;
-  const months = [];
-  for(let m = 0; m < 12; m++) months.push(m);
-  document.getElementById('calMonths').innerHTML = months.map(m => monthGrid(calState.year, m)).join('');
-  // rulla fram månaden vi utgår från, så man slipper leta
-  const target = document.querySelector(`#calMonths [data-month="${first}"]`);
-  if(target) target.scrollIntoView({ block: 'start' });
+  // Rulla bara fram året när kalendern öppnas. Gör vi det vid varje klick
+  // hoppar raden under fingret.
+  if(scrollTo){
+    const y = document.querySelector('#calYears [aria-pressed="true"]');
+    if(y) y.scrollIntoView({ inline: 'center', block: 'nearest' });
+  }
+}
+function markYear(){
+  document.querySelectorAll('#calYears [data-year]').forEach(b =>
+    b.setAttribute('aria-pressed', String(+b.dataset.year === calState.year)));
+}
+function renderMonths(focusMonth){
+  document.getElementById('calMonths').innerHTML =
+    Array.from({ length: 12 }, (_, m) => monthGrid(calState.year, m)).join('');
+  if(focusMonth != null){
+    const target = document.querySelector(`#calMonths [data-month="${focusMonth}"]`);
+    if(target) target.scrollIntoView({ block: 'start' });
+  }
   updateCalSum();
-  const y = document.querySelector('#calYears [aria-pressed="true"]');
-  if(y) y.scrollIntoView({ inline: 'center', block: 'nearest' });
+}
+function renderCal(focusMonth){
+  renderYears(true);
+  renderMonths(focusMonth != null ? focusMonth : 0);
 }
 
 function monthGrid(year, m){
@@ -1140,7 +1165,12 @@ function updateCalSum(){
 }
 calEl.addEventListener('click', e => {
   const y = e.target.closest('[data-year]');
-  if(y){ calState.year = +y.dataset.year; return renderCal(0); }
+  if(y){
+    calState.year = +y.dataset.year;
+    markYear();
+    document.getElementById('calMonths').scrollTop = 0;
+    return renderMonths(null);
+  }
   const d = e.target.closest('[data-day]');
   if(d){
     const key = d.dataset.day;
@@ -1483,7 +1513,19 @@ function start(){
    Ingen try runt openApp – ett fel där ska synas, inte sväljas. */
 function registerSW(){
   if(!('serviceWorker' in navigator) || location.protocol === 'file:') return;
-  addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+  let reloading = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if(reloading) return;
+    reloading = true;
+    location.reload();
+  });
+  addEventListener('load', async () => {
+    try {
+      const reg = await navigator.serviceWorker.register('sw.js');
+      reg.update();                       // leta efter ny version vid varje start
+      setInterval(() => reg.update(), 60 * 60 * 1000);
+    } catch(e){}
+  });
 }
 
 (async function boot(){
