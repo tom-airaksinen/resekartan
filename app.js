@@ -544,6 +544,9 @@ function rescale(){
   // Kustlinjens halo är ett grepp för världsvyn. Håller vi den lika bred på skärmen
   // hela vägen in blir den ett vitt nät över kartan, så den smalnar av och tonar ut.
   const coastPx = Math.max(.4, 2.6 / Math.sqrt(k));
+  // Streckmönstret ligger i kartans koordinatsystem och skalas med zoomen,
+  // så vid inzoom blev det jättefält. Krymp mönstret i samma takt.
+  d3.select('#hatch').attr('patternTransform', `rotate(45) scale(${u})`);
   d3.select('#coast').attr('stroke-width', coastPx * u)
     .style('opacity', k >= 12 ? 0 : Math.min(.9, .9 * (12 - k) / 6));
   d3.select('#home').selectAll('g').attr('transform', p => `translate(${proj([p.lon, p.lat])}) scale(${u})`);
@@ -931,8 +934,12 @@ function renderCountry(iso){
   const places = new Set();
   groups.forEach(({ st }) => (st.places||[]).forEach(p => places.add(p.name)));
   const n = groups.filter(g => !g.t.planned).length;
-  const sum = n ? `${n} ${n === 1 ? 'resa' : 'resor'} · ${places.size} ${places.size === 1 ? 'plats' : 'platser'}`
-                : 'Inget inlagt ännu.';
+  const planned = groups.length - n;
+  const sum = n
+    ? `${n} ${n === 1 ? 'resa' : 'resor'} · ${places.size} ${places.size === 1 ? 'plats' : 'platser'}`
+    : planned
+      ? `${planned} planerad ${planned === 1 ? 'resa' : 'resor'} – inte varit här än`
+      : 'Inget inlagt ännu.';
   body.innerHTML = `<div class="country">
     <button class="back" data-back>‹ Tillbaka</button>
     <h2><span class="flag">${flagOf(iso)}</span>${esc(countryName(iso))}${home ? '<span class="tag home-badge">Hemma</span>' : ''}</h2>
@@ -986,7 +993,11 @@ function renderViews(){
   const byYear = {};
   sorted.forEach(t => { (byYear[(t.start || '????').slice(0,4)] ??= []).push(t); });
   document.getElementById('view-resor').innerHTML =
-    `<div class="viewhead"><h1>Alla resor</h1><button class="btn primary" id="newTrip">+ Ny resa</button></div>` +
+    `<div class="viewhead"><h1>Alla resor</h1>
+      <div style="display:flex;gap:8px">
+        <button class="btn ghost" id="importTrips">Importera</button>
+        <button class="btn primary" id="newTrip">+ Ny resa</button>
+      </div></div>` +
     (sorted.length
       ? Object.keys(byYear).sort().reverse().map(y => `<h2 class="sec">${y}</h2>${byYear[y].map(tripRow).join('')}`).join('')
       : '<p class="example">Inga resor ännu. Tryck på “Ny resa”.</p>') + seedNote();
@@ -1049,7 +1060,10 @@ function renderViews(){
 
   renderSettings();
 }
-document.addEventListener('click', e => { if(e.target.id === 'newTrip') openEditor(null); });
+document.addEventListener('click', e => {
+  if(e.target.id === 'newTrip') openEditor(null);
+  if(e.target.id === 'importTrips') openImport();
+});
 
 /* ============================ Inställningar ============================ */
 function renderSettings(){
@@ -1691,14 +1705,16 @@ function normPhoton(f){
 }
 function normNominatim(h){
   return { name: h.name || h.display_name.split(',')[0], label: h.display_name,
-           lat: +h.lat, lon: +h.lon, cc: '', kind: h.type || '' };
+           lat: +h.lat, lon: +h.lon,
+           cc: (h.address?.country_code || '').toLowerCase(),   // kräver addressdetails=1
+           kind: h.type || '' };
 }
 async function geocode(q, cc){
   const enc = encodeURIComponent(q);
   // Nominatim först: den svarar med svenska namn, så den vinner när båda hittar
   // samma plats och dubbletten sorteras bort nedan.
   const calls = [
-    fetch(`https://nominatim.openstreetmap.org/search?format=jsonv2&limit=8&accept-language=sv&q=${enc}`
+    fetch(`https://nominatim.openstreetmap.org/search?format=jsonv2&addressdetails=1&limit=8&accept-language=sv&q=${enc}`
           + (cc ? `&countrycodes=${cc}` : ''))
       .then(r => r.json()).then(d => (d || []).map(normNominatim)),
     fetch(`https://photon.komoot.io/api/?q=${enc}&limit=8`)
@@ -1789,6 +1805,192 @@ svg.on('click.pick', event => {
   Object.assign(draft.stops[i].places[j], { lat: +ll[1].toFixed(4), lon: +ll[0].toFixed(4) });
   stopPick();
 });
+
+/* ============================ Import från albumnamn ============================
+   Google Photos API går inte att använda för det här: sedan 31 mars 2025 kommer
+   man bara åt album som appen själv skapat, och delade album ger 403. Men själva
+   albumnamnen bär informationen – "Wroclaw 1-4 juni 2023" säger både vart och när.
+   Så: klistra in namnen, tolka datum ur texten och slå upp orten. */
+const IMON = { jan:0,januari:0,feb:1,februari:1,mar:2,mars:2,apr:3,april:3,maj:4,jun:5,juni:5,
+  jul:6,juli:6,aug:7,augusti:7,sep:8,sept:8,september:8,okt:9,oktober:9,nov:10,november:10,dec:11,december:11 };
+const IMONRE = Object.keys(IMON).sort((a, b) => b.length - a.length).join('|');
+const DASH = '[-–—]';
+const p2 = n => String(n).padStart(2, '0');
+const ymdParts = (y, m, d) => `${y}-${p2(m + 1)}-${p2(d)}`;
+const monOf = t => IMON[t.toLowerCase().replace('.', '')];
+
+// Mest specifika mönstret först, annars snappar ett kortare åt sig fel siffror
+const DATE_RULES = [
+  [/(\d{4})-(\d{2})-(\d{2})\s*[-–—]\s*(\d{4})-(\d{2})-(\d{2})/,
+    m => [`${m[1]}-${m[2]}-${m[3]}`, `${m[4]}-${m[5]}-${m[6]}`]],
+  [/(\d{4})-(\d{2})-(\d{2})/, m => [`${m[1]}-${m[2]}-${m[3]}`, `${m[1]}-${m[2]}-${m[3]}`]],
+  [new RegExp(`(\\d{1,2})\\s+(${IMONRE})\\.?\\s+(\\d{4})\\s*${DASH}\\s*(\\d{1,2})\\s+(${IMONRE})\\.?\\s+(\\d{4})`, 'i'),
+    m => [ymdParts(+m[3], monOf(m[2]), +m[1]), ymdParts(+m[6], monOf(m[5]), +m[4])]],
+  [new RegExp(`(\\d{1,2})\\s+(${IMONRE})\\.?\\s*${DASH}\\s*(\\d{1,2})\\s+(${IMONRE})\\.?\\s+(\\d{4})`, 'i'),
+    m => [ymdParts(+m[5], monOf(m[2]), +m[1]), ymdParts(+m[5], monOf(m[4]), +m[3])]],
+  [new RegExp(`(\\d{1,2})\\s*${DASH}\\s*(\\d{1,2})\\s+(${IMONRE})\\.?\\s+(\\d{4})`, 'i'),
+    m => [ymdParts(+m[4], monOf(m[3]), +m[1]), ymdParts(+m[4], monOf(m[3]), +m[2])]],
+  [new RegExp(`(\\d{1,2})\\s+(${IMONRE})\\.?\\s+(\\d{4})`, 'i'),
+    m => [ymdParts(+m[3], monOf(m[2]), +m[1]), ymdParts(+m[3], monOf(m[2]), +m[1])]],
+  [new RegExp(`(${IMONRE})\\.?\\s+(\\d{4})`, 'i'),
+    m => { const y = +m[2], M = monOf(m[1]); return [ymdParts(y, M, 1), ymdParts(y, M, new Date(y, M + 1, 0).getDate())]; }]
+];
+
+function parseAlbum(line){
+  const s = String(line).trim().replace(/\s+/g, ' ');
+  if(!s) return null;
+  let start = null, end = null, used = '', yearOnly = false;
+  for(const [re, fn] of DATE_RULES){
+    const m = s.match(re);
+    if(m){ [start, end] = fn(m); used = m[0]; break; }
+  }
+  if(!start){
+    const m = s.match(/(?:^|\s)((?:19|20)\d{2})(?:\s|$)/);
+    if(m){ const y = +m[1]; start = `${y}-01-01`; end = `${y}-12-31`; used = m[1]; yearOnly = true; }
+  }
+  const title = (used ? s.replace(used, ' ') : s)
+    .replace(/\b(v\.?\s*\d+|vecka\s*\d+)\b/ig, ' ')
+    .replace(/[,;|]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .replace(/^[\s-–—]+|[\s-–—]+$/g, '')
+    .trim();
+  return { line: s, title, start, end, yearOnly, hasDate: !!used && !yearOnly };
+}
+
+const importer = document.getElementById('importer');
+const imBody = document.getElementById('imBody');
+let imRows = null, imStep = 'paste';
+
+function openImport(){
+  imStep = 'paste'; imRows = null;
+  importer.hidden = false;
+  renderImport();
+  setTimeout(() => document.getElementById('imText')?.focus(), 60);
+}
+function closeImport(){ importer.hidden = true; imRows = null; }
+document.getElementById('imClose').onclick = closeImport;
+
+function renderImport(){
+  const err = document.getElementById('imErr');
+  err.hidden = true;
+  document.getElementById('imTitle').textContent = imStep === 'paste' ? 'Importera resor' : 'Granska innan de läggs in';
+  document.getElementById('imBack').textContent = imStep === 'paste' ? 'Avbryt' : 'Tillbaka';
+  document.getElementById('imNext').textContent = imStep === 'paste' ? 'Tolka raderna' : 'Lägg in valda';
+
+  if(imStep === 'paste'){
+    imBody.innerHTML = `
+      <p class="subtle">Klistra in namnen på dina resealbum, ett per rad. Appen läser ut
+      datum ur namnet och slår upp orten på kartan.</p>
+      <div class="field"><textarea id="imText" spellcheck="false" placeholder="Wroclaw 1-4 juni 2023
+Rom 12–15 mars 2024
+New York 24 dec 2018 - 2 jan 2019
+Sommar i Grekland juli 2022"></textarea></div>
+      <p class="hint">Rader utan datum går också bra – de hamnar längst ned och får datum du fyller i själv.</p>`;
+    return;
+  }
+
+  const ok = imRows.filter(r => r.use).length;
+  imBody.innerHTML = `
+    <p class="imsum">${imRows.length} rader · ${ok} valda${
+      imRows.some(r => r.pending) ? ' <span class="spin"></span> slår upp orter …' : ''}</p>
+    <div>${imRows.map((r, i) => {
+      const bad = !r.place;
+      return `<label class="imrow${bad ? ' bad' : ''}">
+        <input type="checkbox" data-im="${i}" ${r.use ? 'checked' : ''} ${bad ? 'disabled' : ''}>
+        <span>
+          <span class="who">${r.place ? flagOf(r.iso) + ' ' : ''}${esc(r.title || r.line)}${
+            r.yearOnly ? '<span class="imbadge warn">bara år</span>' : ''}${
+            !r.hasDate && !r.yearOnly ? '<span class="imbadge warn">inget datum</span>' : ''}${
+            r.planned ? '<span class="imbadge">planerad</span>' : ''}</span>
+          <span class="src">${esc(r.line)}</span>
+          <span class="meta2">${r.pending ? 'slår upp …'
+            : r.place ? `${esc(r.place.name)}, ${esc(countryName(r.iso))} · ${span(r.start, r.end)}`
+            : 'Hittade ingen ort med det namnet – lägg in den för hand i stället.'}</span>
+        </span>
+      </span></label>`;
+    }).join('')}</div>`;
+}
+
+imBody.addEventListener('change', e => {
+  const cb = e.target.closest('[data-im]');
+  if(!cb || !imRows) return;
+  imRows[+cb.dataset.im].use = cb.checked;
+  const ok = imRows.filter(r => r.use).length;
+  const sum = imBody.querySelector('.imsum');
+  if(sum) sum.textContent = `${imRows.length} rader · ${ok} valda`;
+});
+
+document.getElementById('imBack').onclick = () => {
+  if(imStep === 'review'){ imStep = 'paste'; renderImport(); }
+  else closeImport();
+};
+
+document.getElementById('imNext').onclick = async () => {
+  const err = document.getElementById('imErr');
+  if(imStep === 'paste'){
+    const lines = document.getElementById('imText').value.split('\n').map(x => x.trim()).filter(Boolean);
+    if(!lines.length){ err.textContent = 'Klistra in minst en rad.'; err.hidden = false; return; }
+    if(lines.length > 200){ err.textContent = 'Max 200 rader åt gången.'; err.hidden = false; return; }
+    imRows = lines.map(parseAlbum).filter(Boolean).map(r => ({ ...r, use: false, place: null, iso: null, pending: true }));
+    // Rader utan datum sist – de behöver ändå handpåläggning
+    imRows.sort((a, b) => (b.start || '').localeCompare(a.start || ''));
+    imStep = 'review';
+    renderImport();
+    await lookupRows();
+    return;
+  }
+  // Spara
+  const chosen = imRows.filter(r => r.use && r.place);
+  if(!chosen.length){ err.textContent = 'Kryssa i minst en resa.'; err.hidden = false; return; }
+  const today = new Date().toISOString().slice(0, 10);
+  chosen.forEach(r => {
+    DB.trips.push({
+      id: 't' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+      title: r.title || r.place.name,
+      start: r.start, end: r.end,
+      who: family().map(p => p.id),
+      planned: r.start > today,
+      note: '',
+      stops: [{ iso: r.iso, places: [{ name: r.place.name, lat: r.place.lat, lon: r.place.lon, what: '' }] }]
+    });
+  });
+  saveDB();
+  closeImport();
+  refreshAll();
+  toast(`${chosen.length} ${chosen.length === 1 ? 'resa' : 'resor'} inlagda.`);
+};
+
+/* Slå upp en rad i taget – geokodarna är gratis och ska inte översvämmas */
+async function lookupRows(){
+  for(const r of imRows){
+    const q = (r.title || '').trim();
+    if(!q){ r.pending = false; continue; }
+    try {
+      const hits = await geocode(q, '');
+      const hit = hits[0];
+      if(hit){
+        r.place = { name: hit.name, lat: hit.lat, lon: hit.lon };
+        r.iso = isoFromCC(hit.cc) || await isoByPosition(hit);
+        if(!r.iso){ r.place = null; }
+        else if(r.hasDate) r.use = true;         // säkra rader är förkryssade
+      }
+    } catch(e){}
+    r.pending = false;
+    renderImport();
+    await new Promise(res => setTimeout(res, 1100));   // Nominatim: max 1/sek
+  }
+  renderImport();
+}
+
+const CC2ISO = Object.fromEntries(Object.entries(ISO).map(([num, v]) => [v[0].toLowerCase(), num]));
+const isoFromCC = cc => cc ? CC2ISO[cc.toLowerCase()] || null : null;
+
+// Photon svarar inte alltid med landskod – fall tillbaka på var punkten hamnar
+async function isoByPosition(hit){
+  const pt = [hit.lon, hit.lat];
+  const f = world.features.find(ft => d3.geoContains(ft, pt));
+  return f ? f.id : null;
+}
 
 /* ============================ Start ============================ */
 function refreshAll(){

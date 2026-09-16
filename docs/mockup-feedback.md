@@ -121,6 +121,14 @@ _(fylls på)_
   nedskalning i webbläsaren så varje bild landar på ett par hundra kB. Ligger i en
   egen subcollection, inte i huvuddokumentet.
 
+## Steg 9 (2026-09-16)
+
+- **Import från albumnamn.** Google Photos API är stängt för det här sedan mars 2025,
+  så i stället klistrar man in albumnamnen. Datum tolkas ur texten och orten slås upp.
+- **Streckmönstret för planerade resor** låg i kartans koordinatsystem och växte med
+  zoomen – hela Rumänien blev några få jättefält. Samma klass av bugg som
+  linjebredderna; mönstret krymper nu i takt med zoomen.
+
 ## Senare – inte version 1
 
 Version 1 ska vara väldigt enkel, men datamodellen ska inte stänga dörren för detta.

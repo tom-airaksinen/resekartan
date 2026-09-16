@@ -1,6 +1,6 @@
 /* Offline-cache för app-skalet. Höj CACHE vid varje deploy, annars ligger
    gamla filer kvar hos den som redan sparat appen på hemskärmen. */
-const CACHE = 'resekartan-v7';
+const CACHE = 'resekartan-v8';
 const SHELL = [
   './', './index.html', './app.js', './manifest.json',
   './data/world-50m.js', './data/iso.js', './data/seed.js', './data/firebase-config.js',
