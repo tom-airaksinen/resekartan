@@ -455,7 +455,7 @@ const CONTINENTS = [
   ['Afrika', 6, 20], ['Asien', 45, 90], ['Oceanien', -25, 134]
 ];
 
-const zoom = d3.zoom().scaleExtent([1, 60])
+const zoom = d3.zoom().scaleExtent([1, 400])
   .on('zoom', e => { k = e.transform.k; gWorld.attr('transform', e.transform); rescale(); });
 svg.call(zoom).on('dblclick.zoom', null);
 
@@ -607,7 +607,7 @@ function flyTo(t){
   const pts = t.stops.flatMap(s => (s.places || []).map(p => proj([p.lon, p.lat])));
   if(!pts.length) return;
   fitBox(d3.min(pts, p => p[0]), d3.min(pts, p => p[1]),
-         d3.max(pts, p => p[0]), d3.max(pts, p => p[1]), 12, .6);
+         d3.max(pts, p => p[0]), d3.max(pts, p => p[1]), 60, .6);
 }
 // Rutan en landvy ska fylla: hela landet plus platserna vi varit på i det.
 // Vi mäter landets STÖRSTA landmassa – annars drar Alaska ut hela USA-vyn.
@@ -642,7 +642,7 @@ function flyToCountry(iso){
   // Marginalen måste vara proportionell – ett fast px-tal dränker ett litet land
   const w = b[2] - b[0], h = b[3] - b[1];
   const mx = w > .5 ? w * .08 : 6, my = h > .5 ? h * .08 : 6;
-  fitBox(b[0] - mx, b[1] - my, b[2] + mx, b[3] + my, 40, .85);
+  fitBox(b[0] - mx, b[1] - my, b[2] + mx, b[3] + my, 90, .85);
 }
 function resetZoom(){ ease(svg).call(zoom.transform, d3.zoomIdentity); }
 function clearSel(){
@@ -650,8 +650,9 @@ function clearSel(){
   sel = null; selCountry = null; drawPins(); renderSheet(); resetZoom();
 }
 svg.on('click', () => { if(!pickTarget) clearSel(); });
-d3.select('#zin').on('click', () => svg.transition().call(zoom.scaleBy, 1.6));
-d3.select('#zout').on('click', () => svg.transition().call(zoom.scaleBy, 1/1.6));
+// Samma rörelseinställning som resten av kartan
+d3.select('#zin').on('click', () => ease(svg).call(zoom.scaleBy, 1.6));
+d3.select('#zout').on('click', () => ease(svg).call(zoom.scaleBy, 1/1.6));
 
 /* ============================ Filter ============================ */
 function renderWho(){
@@ -877,7 +878,7 @@ phInput.addEventListener('change', async () => {
   if(phTrip === tripAtStart) renderPhotos();
   toast(failed
     ? `${done - failed} av ${files.length} bilder tillagda, ${failed} misslyckades.`
-    : `${done} ${done === 1 ? 'bild' : 'bilder'} tillagda.`);
+    : done === 1 ? '1 bild tillagd.' : `${done} bilder tillagda.`);
 });
 
 async function removePhoto(id){
@@ -1957,7 +1958,7 @@ document.getElementById('imNext').onclick = async () => {
   saveDB();
   closeImport();
   refreshAll();
-  toast(`${chosen.length} ${chosen.length === 1 ? 'resa' : 'resor'} inlagda.`);
+  toast(chosen.length === 1 ? '1 resa inlagd.' : `${chosen.length} resor inlagda.`);
 };
 
 /* Slå upp en rad i taget – geokodarna är gratis och ska inte översvämmas */

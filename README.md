@@ -51,6 +51,10 @@ ingen handskriven landlista att underhålla.
 Vill man ha ännu finare kustlinjer är 1:10m nästa steg, men den måste byggas från
 Natural Earths shapefiles (mapshaper) och blir flera megabyte.
 
+Kartan går att zooma till 400×. Så nära blir kustlinjerna kantiga – 50m-datat har
+inte den detaljen – men pluppar, ortsnamn och linjer håller sin storlek hela vägen
+eftersom allt som ritas ovanpå skalas med `1/k` i `rescale()`.
+
 ### Två CSS-fällor värda att minnas
 
 **CSS vinner över presentationsattribut.** Kartans linjebredder räknas fram per
