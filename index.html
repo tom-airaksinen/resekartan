@@ -56,6 +56,9 @@
   --map-label:#AEBAC4; --sea-label:#5A7183;
 }
 *{box-sizing:border-box}
+/* manipulation tar bort iOS dubbeltapp-zoom men behåller panorering och nyp,
+   så sidan inte kan fastna inzoomad. Kartan sätter egen touch-action. */
+html,body,#app,#tabs,.view,.sheet-body,.edbody,.months,#imBody{touch-action:manipulation}
 html,body{height:100%;margin:0}
 @supports (height: 100dvh){ html,body{height:100dvh} }
 body{background:var(--ocean);color:var(--ink);font:15px/1.45 Figtree,"Helvetica Neue",Arial,sans-serif;overflow:hidden;-webkit-tap-highlight-color:transparent}

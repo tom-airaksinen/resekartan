@@ -1246,7 +1246,14 @@ function setTab(t){
 }
 document.getElementById('tabs').addEventListener('click', e => {
   const b = e.target.closest('[role=tab]');
-  if(b) setTab(b.dataset.tab);
+  if(!b) return;
+  // Trycker man på fliken man redan står i backar man ut till dess grundvy,
+  // som i de flesta iOS-appar
+  if(b.dataset.tab === 'karta' && tab === 'karta'){
+    if(sel || selCountry) clearSel();
+    else setSheet(.5);
+  }
+  setTab(b.dataset.tab);
 });
 document.getElementById('settingsBtn').onclick = () => setTab(tab === 'settings' ? 'karta' : 'settings');
 
