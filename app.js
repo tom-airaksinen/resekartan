@@ -26,23 +26,152 @@ async function derive(pw){
 const lockEl = document.getElementById('lock'), appEl = document.getElementById('app');
 function openApp(){ lockEl.hidden = true; appEl.hidden = false; start(); }
 
+/* ============================ Moln (Firebase) ============================
+   Utan konfiguration kör appen helt lokalt: localStorage + lösenordshashen ovan.
+   Med konfiguration delar alla enheter samma data och inloggningen går mot
+   Firebase Authentication, som också är det som faktiskt skyddar datat.
+
+   Hela datat ligger i ETT dokument. För en familj är det några tiotal kB, långt
+   under Firestores gräns, och det gör varje sparning atomär. Baksidan: sparar två
+   personer i samma sekund vinner den sista. Med fyra användare är det en rimlig
+   avvägning – blir det ett problem är nästa steg ett dokument per resa. */
+const CLOUD = { on: false, ready: false, mod: null, db: null, auth: null, ref: null, user: null, applying: false };
+const useCloud = () => !!window.FIREBASE_CONFIG;
+const SDK = 'https://www.gstatic.com/firebasejs/10.12.2/';
+
+async function cloudInit(){
+  if(CLOUD.ready || !useCloud()) return CLOUD.ready;
+  const [app, auth, store] = await Promise.all([
+    import(SDK + 'firebase-app.js'),
+    import(SDK + 'firebase-auth.js'),
+    import(SDK + 'firebase-firestore.js')
+  ]);
+  const a = app.initializeApp(window.FIREBASE_CONFIG);
+  CLOUD.mod = { auth, store };
+  CLOUD.auth = auth.getAuth(a);
+  CLOUD.db = store.getFirestore(a);
+  CLOUD.ref = store.doc(CLOUD.db, 'resekartan', 'data');
+  await auth.setPersistence(CLOUD.auth, auth.browserLocalPersistence).catch(() => {});
+  CLOUD.ready = true;
+  return true;
+}
+
+function cloudDot(state, title){
+  const el = document.getElementById('cloudDot');
+  if(!el) return;
+  el.hidden = !useCloud();
+  el.className = 'cloud' + (state ? ' ' + state : '');
+  el.title = title || '';
+}
+
+/* Lyssna på dokumentet så alla enheter följer med i realtid */
+function cloudWatch(){
+  const { store } = CLOUD.mod;
+  store.onSnapshot(CLOUD.ref, snap => {
+    if(snap.metadata.hasPendingWrites) return;   // vår egen skrivning, redan ritad
+    const d = snap.data();
+    if(!d || !d.payload) return;
+    let incoming;
+    try { incoming = JSON.parse(d.payload); } catch(e){ return; }
+    if(!incoming || !Array.isArray(incoming.trips)) return;
+    if(JSON.stringify(incoming) === JSON.stringify(DB)) return;
+    CLOUD.applying = true;
+    DB = incoming;
+    normaliseDB();
+    try { localStorage.setItem(LS_KEY, JSON.stringify(DB)); } catch(e){}
+    refreshAll();
+    CLOUD.applying = false;
+    cloudDot('on', 'Synkad med familjens data');
+  }, err => {
+    cloudDot('off', 'Ingen kontakt med molnet: ' + err.code);
+    toast('Tappade kontakten med molnet. Ändringar sparas lokalt.');
+  });
+}
+
+let cloudQueue = null;
+async function cloudSave(){
+  if(!CLOUD.on || CLOUD.applying) return;
+  const { store } = CLOUD.mod;
+  clearTimeout(cloudQueue);
+  cloudQueue = setTimeout(async () => {
+    try {
+      await store.setDoc(CLOUD.ref, {
+        payload: JSON.stringify(DB),
+        updatedAt: store.serverTimestamp(),
+        updatedBy: CLOUD.user?.email || 'okänd'
+      });
+      cloudDot('on', 'Sparat i molnet');
+    } catch(err){
+      cloudDot('off', 'Kunde inte spara i molnet: ' + err.code);
+      toast('Kunde inte spara i molnet – ändringen finns kvar lokalt.');
+    }
+  }, 400);
+}
+
+/* Första inloggningen mot ett tomt moln: lägg upp det som redan finns lokalt */
+async function cloudFirstSync(){
+  const { store } = CLOUD.mod;
+  const snap = await store.getDoc(CLOUD.ref);
+  if(snap.exists() && snap.data().payload){
+    try {
+      const d = JSON.parse(snap.data().payload);
+      if(d && Array.isArray(d.trips)){ DB = d; normaliseDB(); }
+    } catch(e){}
+  } else {
+    DB = loadDB(); normaliseDB();
+    await store.setDoc(CLOUD.ref, {
+      payload: JSON.stringify(DB),
+      updatedAt: store.serverTimestamp(),
+      updatedBy: CLOUD.user?.email || 'okänd'
+    });
+  }
+  try { localStorage.setItem(LS_KEY, JSON.stringify(DB)); } catch(e){}
+}
+
+const AUTH_ERRORS = {
+  'auth/invalid-credential': 'Fel e-post eller lösenord.',
+  'auth/wrong-password': 'Fel lösenord.',
+  'auth/user-not-found': 'Det finns inget konto med den e-posten.',
+  'auth/invalid-email': 'Kontrollera e-postadressen.',
+  'auth/too-many-requests': 'För många försök. Vänta en stund.',
+  'auth/network-request-failed': 'Ingen kontakt med nätet.'
+};
+
 document.getElementById('lockForm').addEventListener('submit', async e => {
   e.preventDefault();
   const btn = document.getElementById('pwBtn'), err = document.getElementById('pwErr');
   const pw = document.getElementById('pw').value;
   btn.disabled = true; btn.textContent = 'Kollar …'; err.textContent = '';
-  try {
-    if(await derive(pw) === AUTH.hash){
-      try { localStorage.setItem(LS_AUTH, AUTH.hash); } catch(e){}
-      return openApp();
+
+  if(useCloud()){
+    const email = document.getElementById('email').value.trim();
+    try {
+      await cloudInit();
+      const { auth } = CLOUD.mod;
+      const cred = await auth.signInWithEmailAndPassword(CLOUD.auth, email, pw);
+      CLOUD.user = cred.user; CLOUD.on = true;
+      await cloudFirstSync();
+      openApp();
+      cloudWatch();
+      cloudDot('on', 'Inloggad som ' + email);
+      return;
+    } catch(ex){
+      err.textContent = AUTH_ERRORS[ex.code] || ('Inloggningen misslyckades (' + (ex.code || ex.message) + ').');
     }
-    err.textContent = 'Fel lösenord.';
-  } catch(e){
-    err.textContent = e.message === 'nocrypto'
-      ? 'Låset behöver https (eller localhost) för att fungera.'
-      : 'Något gick fel. Försök igen.';
+  } else {
+    try {
+      if(await derive(pw) === AUTH.hash){
+        try { localStorage.setItem(LS_AUTH, AUTH.hash); } catch(e){}
+        return openApp();
+      }
+      err.textContent = 'Fel lösenord.';
+    } catch(ex){
+      err.textContent = ex.message === 'nocrypto'
+        ? 'Låset behöver https (eller localhost) för att fungera.'
+        : 'Något gick fel. Försök igen.';
+    }
   }
-  btn.disabled = false; btn.textContent = 'Lås upp';
+  btn.disabled = false; btn.textContent = useCloud() ? 'Logga in' : 'Lås upp';
   document.getElementById('pw').select();
 });
 
@@ -92,6 +221,7 @@ function loadDB(){
 function saveDB(){
   try { localStorage.setItem(LS_KEY, JSON.stringify(DB)); }
   catch(e){ toast('Kunde inte spara på den här enheten.'); }
+  cloudSave();
 }
 const usingSeed = () => { try { return !localStorage.getItem(LS_KEY); } catch(e){ return true; } };
 
@@ -424,7 +554,7 @@ const statTiles = (s, cls = 'stats') => `<div class="${cls}">
   <div class="stat"><div class="num">${s.trips}</div><span>resor</span></div>
   <div class="stat"><div class="num">${s.days}</div><span>dagar på resande fot</span></div>
   <div class="stat"><div class="num">${filter ? 1 : family().length}</div><span>${filter ? 'resenär' : 'familjemedlemmar'}</span></div></div>`;
-const seedNote = () => usingSeed()
+const seedNote = () => (usingSeed() && !CLOUD.on)
   ? '<p class="example">Exempeldata. Lägg in era egna resor under Resor → Ny resa.</p>' : '';
 
 function renderSheet(){
@@ -623,8 +753,15 @@ function renderSettings(){
       <button class="btn ghost" id="addPerson">Lägg till</button></div>
     <div class="actions"><button class="btn" id="savePeople">Spara resenärer</button></div>
 
+    <h2 class="sec">Lagring</h2>
+    <p class="subtle">${useCloud()
+      ? (CLOUD.on
+          ? `Molnläge. Data delas med alla som loggar in – inloggad som <strong>${esc(CLOUD.user?.email || '')}</strong>. Ändringar syns på övriga enheter direkt.`
+          : 'Molnläge är påslaget men inloggningen saknas. Ladda om sidan och logga in.')
+      : 'Lokalt läge. Data ligger bara i den här webbläsaren. Fyll i <code>data/firebase-config.js</code> för att dela den mellan enheter.'}</p>
+
     <h2 class="sec">Säkerhetskopia</h2>
-    <p class="subtle">All data ligger bara i den här webbläsaren tills Firebase kopplas på. Kopiera texten och spara den någonstans, eller klistra in en tidigare kopia för att läsa in den.</p>
+    <p class="subtle">Kopiera texten och spara den någonstans, eller klistra in en tidigare kopia för att läsa in den.</p>
     <textarea class="codebox" id="dump" spellcheck="false" aria-label="Data som JSON"></textarea>
     <div class="actions">
       <button class="btn" id="copyDump">Kopiera</button>
@@ -632,14 +769,15 @@ function renderSettings(){
       <button class="btn ghost" id="resetData">Återställ exempel</button>
     </div>
 
-    <h2 class="sec">Lösenord</h2>
+    ${useCloud() ? '' : `<h2 class="sec">Lösenord</h2>
     <p class="subtle">Sidan är statisk, så lösenordet skyddar mot nyfikna – inte mot någon som läser koden. Skriv ett nytt lösenord för att få raden som ska klistras in i <code>app.js</code>.</p>
     <div class="field"><input type="password" id="newPw" placeholder="Nytt lösenord" autocomplete="new-password" aria-label="Nytt lösenord"></div>
     <button class="btn" id="mkHash">Skapa hash</button>
-    <textarea class="codebox" id="hashOut" spellcheck="false" hidden aria-label="Ny hash-rad"></textarea>
+    <textarea class="codebox" id="hashOut" spellcheck="false" hidden aria-label="Ny hash-rad"></textarea>`}
 
     <h2 class="sec">Den här enheten</h2>
     <button class="btn ghost" id="logout">Logga ut</button>
+    <p class="hint">${useCloud() ? 'Loggar ut från familjens konto på den här enheten.' : 'Låser appen igen på den här enheten.'}</p>
     <p class="example">Kartdata: Natural Earth 1:50m via world-atlas (public domain).</p>`;
   const dump = document.getElementById('dump');
   if(dump) dump.value = JSON.stringify(DB, null, 1);
@@ -726,6 +864,7 @@ document.addEventListener('click', async e => {
     } catch(err){ toast('Låset behöver https eller localhost.'); }
   }
   if(id === 'logout'){
+    if(CLOUD.on){ try { await CLOUD.mod.auth.signOut(CLOUD.auth); } catch(err){} }
     try { localStorage.removeItem(LS_AUTH); } catch(err){}
     location.reload();
   }
@@ -1299,12 +1438,17 @@ svg.on('click.pick', event => {
 function refreshAll(){
   renderWho(); drawPins(); renderSheet(); renderViews();
 }
-function start(){
-  DB = loadDB();
+function normaliseDB(){
   DB.people ??= structuredClone(SEED.people);
   DB.trips ??= [];
+  DB.home ??= structuredClone(SEED.home);
   // Äldre data saknar core-flaggan – då var alla familj
   if(!DB.people.some(p => p.core)) DB.people.forEach(p => { p.core = true; });
+}
+function start(){
+  if(!CLOUD.on) DB = loadDB();
+  normaliseDB();
+  cloudDot(CLOUD.on ? 'on' : '', CLOUD.on ? 'Synkad med familjens data' : '');
   document.getElementById('brandSub').textContent =
     DB.people.map(p => p.name.split(' ')[0]).slice(0,4).join(', ');
   renderWho(); layout(); renderSheet(); renderViews();
@@ -1313,6 +1457,49 @@ function start(){
 
 /* Körs sist: start() rör kartans konstanter, som måste vara initialiserade först.
    Ingen try runt openApp – ett fel där ska synas, inte sväljas. */
-let wasUnlocked = false;
-try { wasUnlocked = localStorage.getItem(LS_AUTH) === AUTH.hash; } catch(e){}
-if(wasUnlocked) openApp(); else document.getElementById('pw').focus();
+function registerSW(){
+  if(!('serviceWorker' in navigator) || location.protocol === 'file:') return;
+  addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+}
+
+(async function boot(){
+  registerSW();
+
+  if(!useCloud()){
+    let unlocked = false;
+    try { unlocked = localStorage.getItem(LS_AUTH) === AUTH.hash; } catch(e){}
+    if(unlocked) openApp(); else document.getElementById('pw').focus();
+    return;
+  }
+
+  // Molnläge: Firebase Authentication ersätter lösenordshashen
+  document.getElementById('email').hidden = false;
+  document.getElementById('pwBtn').textContent = 'Logga in';
+  document.getElementById('lockLead').textContent = 'Familjens resor. Logga in för att komma in.';
+  cloudDot('', 'Kopplar upp …');
+  try {
+    await cloudInit();
+    CLOUD.mod.auth.onAuthStateChanged(CLOUD.auth, async user => {
+      if(!user){
+        cloudDot('', 'Inte inloggad');
+        document.getElementById('email').focus();
+        return;
+      }
+      CLOUD.user = user; CLOUD.on = true;
+      try { await cloudFirstSync(); }
+      catch(e){
+        document.getElementById('pwErr').textContent =
+          e.code === 'permission-denied'
+            ? 'Kontot har inte behörighet till datat. Kontrollera Firestore-reglerna.'
+            : 'Kunde inte hämta datat: ' + (e.code || e.message);
+        return;
+      }
+      if(appEl.hidden) openApp(); else refreshAll();
+      cloudWatch();
+      cloudDot('on', 'Inloggad som ' + user.email);
+    });
+  } catch(e){
+    document.getElementById('pwErr').textContent = 'Kunde inte ladda Firebase. Kontrollera nätet.';
+    cloudDot('off', 'Firebase kunde inte laddas');
+  }
+})();

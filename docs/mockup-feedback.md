@@ -86,6 +86,18 @@ _(fylls på)_
 - **Ortsökningen** kan inte fungera i en sandlådad förhandsvisning. Meddelandet säger
   nu varför, och kartpekningen zoomar in på stoppets land först.
 
+## Steg 6 (2026-09-16) – live, PWA och moln
+
+- **Live på GitHub Pages:** https://tom-airaksinen.github.io/resekartan/
+- **PWA.** `manifest.json`, ikoner och en service worker som cachar app-skalet.
+  Går att spara på hemskärmen och fungerar offline efter första besöket.
+- **Avatarerna igen.** iOS Safari centrerade inte innehållet med `inline-grid` +
+  `place-items` – bokstaven hamnade uppe till vänster. Utbytt mot `inline-flex`
+  med utskrivna `align-items`/`justify-content`, som håller i alla webbläsare.
+- **Firebase förberett.** Appen kör lokalt tills `data/firebase-config.js` fylls i;
+  då byter den till molnläge med Firebase Authentication och ett delat
+  Firestore-dokument. Guide i `docs/firebase.md`, regler i `firestore.rules`.
+
 ## Senare – inte version 1
 
 Version 1 ska vara väldigt enkel, men datamodellen ska inte stänga dörren för detta.

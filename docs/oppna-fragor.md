@@ -3,7 +3,8 @@
 ## Plattform
 - [x] PWA i webbläsaren (som Flippa/Gnugga/Morsemaskinen) eller något annat? → **Svar:** Ja, responsiv webbapp på GitHub Pages. Firebase som gemensam databas i ett senare steg, så Hedvig kan lägga in från mobilen, Tom från datorn och Aron från paddan. (2026-09-16)
 - [x] Ska den vara publik eller kräva inloggning? → **Svar:** Rudimentärt lösenordsskydd räcker, inga användarkonton. Inloggningen sparas per enhet i localStorage. Byggt 2026-09-16: PBKDF2-hash i koden, aldrig lösenordet i klartext. (2026-09-16)
-- [ ] Hur skyddas datat när Firebase kopplas på? Lösenordsgrinden i klienten räcker inte då – det blir Firebase-reglerna som gör jobbet.
+- [x] Hur skyddas datat när Firebase kopplas på? → **Svar:** Firebase Authentication med ett delat familjekonto (e-post + lösenord), och Firestore-regler som bara släpper in det kontots uid. Då ersätter det den lokala lösenordsgrinden. Byggt 2026-09-16, väntar på att projektet skapas i konsolen – se `docs/firebase.md`. (2026-09-16)
+- [ ] Skapa Firebase-projektet och fyll i `data/firebase-config.js` + uid i `firestore.rules`.
 - [x] Eget repo på GitHub, eller en mapp i något befintligt? → **Svar:** Eget publikt repo, som morsemaskinen. Live på https://tom-airaksinen.github.io/resekartan/ sedan 2026-09-16. Publikt krävs för Pages på Free-planen. (2026-09-16)
 - [ ] Vad blir lösenordet? Byt från utgångsvärdet under Inställningar → Lösenord, och klistra in hashen i `AUTH` i `app.js`. Skriv aldrig lösenordet i repot.
 

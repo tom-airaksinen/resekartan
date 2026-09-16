@@ -1,0 +1,26 @@
+rules_version = '2';
+
+// Resekartan: ett enda dokument med familjens data.
+// Bara inloggade konton som står i listan kommer åt det.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Klistra in familjens uid här (Firebase-konsolen → Authentication → Users).
+    // Tills listan är ifylld släpps ingen in.
+    function familjen() {
+      return [
+        'KLISTRA_IN_UID_HAR'
+      ];
+    }
+
+    match /resekartan/data {
+      allow read, write: if request.auth != null
+                         && request.auth.uid in familjen();
+    }
+
+    // Allt annat är stängt
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
