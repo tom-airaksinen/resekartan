@@ -1,6 +1,18 @@
-/* Offline-cache för app-skalet. Höj CACHE vid varje deploy, annars ligger
-   gamla filer kvar hos den som redan sparat appen på hemskärmen. */
-const CACHE = 'resekartan-v14';
+/* Offline-cache för app-skalet.
+
+   Två saker som gick fel tidigare och som reglerna nedan finns till för:
+
+   1. `cache.add()` går genom webbläsarens vanliga HTTP-cache. GitHub Pages sätter
+      max-age, så en ny service worker kunde lägga in en *gammal* fil i sin färska
+      cache – appen startade i lokalt läge trots att konfigurationen var ifylld.
+      Därför hämtas allt med `cache: 'reload'` vid installation.
+
+   2. Cache-först på koden gjorde att den som sparat appen på hemskärmen blev kvar
+      i en gammal version. Nu går sidan och de små kodfilerna nätverket först och
+      faller tillbaka på cachen; bara det tunga (kartdata, ikoner, bibliotek)
+      läses cache-först. */
+const CACHE = 'resekartan-v15';
+
 const SHELL = [
   './', './index.html', './app.js', './manifest.json',
   './data/world-50m.js', './data/iso.js', './data/seed.js', './data/firebase-config.js',
@@ -9,11 +21,16 @@ const SHELL = [
   'https://cdnjs.cloudflare.com/ajax/libs/topojson/3.0.2/topojson.min.js'
 ];
 
+// Små filer som styr hur appen beter sig – de ska alltid vara färska
+const FRESH = /\/(index\.html|app\.js|manifest\.json)$|\/data\/(firebase-config|seed|iso)\.js$|\/$/;
+
 self.addEventListener('install', e => {
   e.waitUntil((async () => {
     const c = await caches.open(CACHE);
-    // En enda trasig URL ska inte fälla hela installationen
-    await Promise.allSettled(SHELL.map(u => c.add(u)));
+    await Promise.allSettled(SHELL.map(async u => {
+      const res = await fetch(new Request(u, { cache: 'reload' }));
+      if(res && res.ok) await c.put(u, res);
+    }));
     self.skipWaiting();
   })());
 });
@@ -31,30 +48,26 @@ self.addEventListener('fetch', e => {
   if(request.method !== 'GET') return;
   const url = new URL(request.url);
 
-  // Live-data ska alltid gå mot nätet
+  // Live-data går alltid mot nätet
   if(/firestore|identitytoolkit|firebaseio|nominatim|photon/.test(url.hostname)) return;
 
   // Firebase-SDK:n är statiska filer – värd att cacha, annars laddas ~300 kB
   // vid varje kallstart och inloggningen känns hängd.
   const isSDK = url.hostname === 'www.gstatic.com' && url.pathname.includes('/firebasejs/');
-
-  // HTML hämtas nätverket först, annars fastnar den som sparat appen på
-  // hemskärmen i en gammal version tills cachen råkar bytas ut.
-  const isPage = request.mode === 'navigate' ||
-    (request.destination === 'document') ||
-    url.pathname.endsWith('/') || url.pathname.endsWith('.html');
+  const isPage = request.mode === 'navigate' || request.destination === 'document';
+  const wantFresh = isPage || (url.origin === location.origin && FRESH.test(url.pathname));
 
   e.respondWith((async () => {
     const cached = await caches.match(request);
     const net = fetch(request).then(res => {
-      if(res && res.ok && (url.origin === location.origin || isSDK || SHELL.includes(request.url))){
+      if(res && res.ok && (url.origin === location.origin || isSDK)){
         const copy = res.clone();
         caches.open(CACHE).then(c => c.put(request, copy));
       }
       return res;
     }).catch(() => null);
 
-    if(isPage) return (await net) || cached || new Response('Offline', { status: 503 });
+    if(wantFresh) return (await net) || cached || new Response('Offline', { status: 503 });
     return cached || (await net) || new Response('Offline', { status: 503 });
   })());
 });

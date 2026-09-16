@@ -14,6 +14,7 @@ const AUTH = {
   hash: '5805d07268265f31365760d2aa2a450e97629e0d6a43c36829b54b3d971026c7'
 };
 const LS_KEY = 'resekartan.data', LS_AUTH = 'resekartan.unlocked';
+const APP_VERSION = 'v15';   // följ sw.js CACHE, så man ser vad som faktiskt körs
 
 async function derive(pw){
   if(!crypto?.subtle) throw new Error('nocrypto');
@@ -30,7 +31,29 @@ function lockStatus(text){
   box.hidden = !text;
   if(text) document.getElementById('pwStatusText').textContent = text;
 }
-function openApp(){ lockEl.hidden = true; appEl.hidden = false; start(); }
+/* Låsskärmen ligger kvar tills första ritningen är klar. Annars står man en stund
+   framför en tom app och undrar om den hängt sig – och kraschar uppstarten blir det
+   en tom skärm utan förklaring i stället för ett felmeddelande. */
+function openApp(){
+  appEl.hidden = false;
+  lockStatus('Ritar kartan …');
+  // Låt webbläsaren måla laddningstexten innan det tunga arbetet börjar
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    try {
+      start();
+      lockStatus('');
+      lockEl.hidden = true;
+    } catch(e){
+      lockStatus('');
+      appEl.hidden = true;
+      document.getElementById('pwErr').textContent = 'Appen kunde inte starta: ' + (e.message || e);
+      const btn = document.getElementById('pwBtn');
+      btn.disabled = false;
+      btn.textContent = useCloud() ? 'Logga in' : 'Lås upp';
+      console.error('start() kraschade:', e);
+    }
+  }));
+}
 
 /* ============================ Moln (Firebase) ============================
    Utan konfiguration kör appen helt lokalt: localStorage + lösenordshashen ovan.
@@ -128,7 +151,11 @@ async function cloudSave(){
 /* Första inloggningen mot ett tomt moln: lägg upp det som redan finns lokalt */
 async function cloudFirstSync(){
   const { store } = CLOUD.mod;
-  const snap = await store.getDoc(CLOUD.ref);
+  // Segt nät ska inte betyda oändlig väntan
+  const snap = await Promise.race([
+    store.getDoc(CLOUD.ref),
+    new Promise((_, rej) => setTimeout(() => rej(new Error('slow')), 12000))
+  ]);
   if(snap.exists() && snap.data().payload){
     try {
       const d = JSON.parse(snap.data().payload);
@@ -163,7 +190,7 @@ document.getElementById('lockForm').addEventListener('submit', async e => {
   if(useCloud()){
     const email = document.getElementById('email').value.trim();
     try {
-      lockStatus('Kopplar upp …');
+      lockStatus('Kopplar upp mot molnet …');
       await cloudInit();
       const { auth } = CLOUD.mod;
       lockStatus('Loggar in …');
@@ -171,7 +198,6 @@ document.getElementById('lockForm').addEventListener('submit', async e => {
       CLOUD.user = cred.user; CLOUD.on = true;
       lockStatus('Hämtar familjens resor …');
       await cloudFirstSync();
-      lockStatus('');
       openApp();
       cloudWatch();
       cloudDot('on', 'Inloggad som ' + email);
@@ -1186,6 +1212,13 @@ function renderSettings(){
     <div class="addp"><input type="text" id="newPerson" placeholder="t.ex. mormor Ingrid" aria-label="Ny resenär">
       <button class="btn ghost" id="addPerson">Lägg till</button></div>
     <div class="actions"><button class="btn" id="savePeople">Spara resenärer</button></div>
+
+    <h2 class="sec">Den här versionen</h2>
+    <dl class="facts">
+      <dt>Läge</dt><dd>${useCloud() ? (CLOUD.on ? 'Moln, inloggad' : 'Moln, ej inloggad') : 'Lokalt'}</dd>
+      <dt>Appversion</dt><dd>${esc(APP_VERSION)}</dd>
+    </dl>
+    ${useCloud() ? '' : `<p class="subtle" style="margin-top:8px">Appen kör lokalt trots att molnet är påslaget i repot? Då ligger en gammal version kvar i cachen – tryck <b>Hämta senaste versionen</b> längst ned.</p>`}
 
     <h2 class="sec">Lagring</h2>
     <p class="subtle">${useCloud()
@@ -2217,7 +2250,7 @@ function registerSW(){
   document.getElementById('pwBtn').textContent = 'Logga in';
   document.getElementById('lockLead').textContent = 'Familjens resor. Logga in för att komma in.';
   cloudDot('', 'Kopplar upp …');
-  lockStatus('Kopplar upp …');
+  lockStatus('Kopplar upp mot molnet …');
   try {
     await cloudInit();
     lockStatus('');
@@ -2232,14 +2265,22 @@ function registerSW(){
       try { await cloudFirstSync(); }
       catch(e){
         lockStatus('');
+        if(e.message === 'slow'){
+          // Nätet är segt men datat finns lokalt – öppna med det vi har
+          DB = loadDB(); normaliseDB();
+          if(appEl.hidden) openApp();
+          cloudWatch();
+          cloudDot('off', 'Långsam uppkoppling – visar senast sparade');
+          toast('Molnet svarar långsamt. Visar det som fanns sparat här.');
+          return;
+        }
         document.getElementById('pwErr').textContent =
           e.code === 'permission-denied'
             ? 'Kontot har inte behörighet till datat. Kontrollera Firestore-reglerna.'
             : 'Kunde inte hämta datat: ' + (e.code || e.message);
         return;
       }
-      lockStatus('');
-      if(appEl.hidden) openApp(); else refreshAll();
+      if(appEl.hidden) openApp(); else { refreshAll(); lockStatus(''); }
       cloudWatch();
       cloudDot('on', 'Inloggad som ' + user.email);
     });

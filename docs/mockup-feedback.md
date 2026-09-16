@@ -145,6 +145,20 @@ _(fylls på)_
   och reselistan lika mycket.
 - **Inställningar blev en femte flik** i stället för ett fritt flytande kugghjul.
 
+## Steg 12 (2026-09-16)
+
+- **Appen startade i lokalt läge på telefonen** trots ifylld Firebase-konfiguration:
+  låsskärmen visade bara lösenordsfältet. Orsaken var att service workerns
+  `cache.add()` går genom webbläsarens HTTP-cache, så en ny cache kunde fyllas med
+  en gammal `firebase-config.js` (den med `null`). Installationen hämtar nu allt med
+  `cache: 'reload'`, och koden går nätverket först.
+- **Tomt vitt läge vid start.** Låsskärmen ligger nu kvar tills första ritningen är
+  klar, med texterna Kopplar upp → Loggar in → Hämtar familjens resor → Ritar kartan.
+  Kraschar uppstarten visas felet i stället för en tom skärm.
+- **Molnhämtningen har tidsgräns.** Svarar Firestore inte inom 12 sekunder öppnas
+  appen med det som fanns sparat lokalt i stället för att vänta.
+- Inställningar visar läge och version, så en gammal cachad version syns direkt.
+
 ## Senare – inte version 1
 
 Version 1 ska vara väldigt enkel, men datamodellen ska inte stänga dörren för detta.
