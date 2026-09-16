@@ -98,6 +98,20 @@ _(fylls på)_
   då byter den till molnläge med Firebase Authentication och ett delat
   Firestore-dokument. Guide i `docs/firebase.md`, regler i `firestore.rules`.
 
+## Steg 7 (2026-09-16) – riktiga enheter
+
+- **Allt avklippt på iPhone efter inloggning.** Såg ut som safe area men var iOS
+  auto-zoom: fokuserar man ett fält med `font-size` under 16px zoomar iOS in, och
+  i hemskärmsläge går det inte att zooma ut igen. Alla fält är nu 16px.
+- **Nyckeltalen** låg i en horisontell scroller som såg avklippt ut. Nu ett rutnät
+  som radbryter (3 + 2 på en telefon).
+- **Safe area** hanteras nu även i sidled och för flikraden, inte bara i överkant.
+- **Inloggningen kändes hängd.** Firebase-SDK:n (~300 kB) laddades vid varje
+  kallstart utan cache och utan synlig återkoppling. Nu cachas den av service
+  workern, och låsskärmen visar "Kopplar upp → Loggar in → Hämtar familjens resor".
+- **Service workern hämtar sidan nätverket först**, så ingen fastnar i en gammal
+  version efter att ha sparat appen på hemskärmen.
+
 ## Senare – inte version 1
 
 Version 1 ska vara väldigt enkel, men datamodellen ska inte stänga dörren för detta.

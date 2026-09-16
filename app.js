@@ -24,6 +24,12 @@ async function derive(pw){
   return [...new Uint8Array(bits)].map(b => b.toString(16).padStart(2,'0')).join('');
 }
 const lockEl = document.getElementById('lock'), appEl = document.getElementById('app');
+function lockStatus(text){
+  const box = document.getElementById('pwStatus');
+  if(!box) return;
+  box.hidden = !text;
+  if(text) document.getElementById('pwStatusText').textContent = text;
+}
 function openApp(){ lockEl.hidden = true; appEl.hidden = false; start(); }
 
 /* ============================ Moln (Firebase) ============================
@@ -39,8 +45,10 @@ const CLOUD = { on: false, ready: false, mod: null, db: null, auth: null, ref: n
 const useCloud = () => !!window.FIREBASE_CONFIG;
 const SDK = 'https://www.gstatic.com/firebasejs/10.12.2/';
 
-async function cloudInit(){
-  if(CLOUD.ready || !useCloud()) return CLOUD.ready;
+let cloudInitPromise = null;
+function cloudInit(){ return cloudInitPromise ??= cloudInitOnce(); }
+async function cloudInitOnce(){
+  if(!useCloud()) return false;
   const [app, auth, store] = await Promise.all([
     import(SDK + 'firebase-app.js'),
     import(SDK + 'firebase-auth.js'),
@@ -155,17 +163,24 @@ document.getElementById('lockForm').addEventListener('submit', async e => {
   if(useCloud()){
     const email = document.getElementById('email').value.trim();
     try {
+      lockStatus('Kopplar upp …');
       await cloudInit();
       const { auth } = CLOUD.mod;
+      lockStatus('Loggar in …');
       const cred = await auth.signInWithEmailAndPassword(CLOUD.auth, email, pw);
       CLOUD.user = cred.user; CLOUD.on = true;
+      lockStatus('Hämtar familjens resor …');
       await cloudFirstSync();
+      lockStatus('');
       openApp();
       cloudWatch();
       cloudDot('on', 'Inloggad som ' + email);
       return;
     } catch(ex){
-      err.textContent = AUTH_ERRORS[ex.code] || ('Inloggningen misslyckades (' + (ex.code || ex.message) + ').');
+      lockStatus('');
+      err.textContent = ex.code === 'permission-denied'
+        ? 'Inloggad, men kontot saknar behörighet till datat. Kontrollera Firestore-reglerna.'
+        : (AUTH_ERRORS[ex.code] || ('Inloggningen misslyckades (' + (ex.code || ex.message) + ').'));
     }
   } else {
     try {
@@ -1486,23 +1501,28 @@ function registerSW(){
   document.getElementById('pwBtn').textContent = 'Logga in';
   document.getElementById('lockLead').textContent = 'Familjens resor. Logga in för att komma in.';
   cloudDot('', 'Kopplar upp …');
+  lockStatus('Kopplar upp …');
   try {
     await cloudInit();
+    lockStatus('');
     CLOUD.mod.auth.onAuthStateChanged(CLOUD.auth, async user => {
       if(!user){
         cloudDot('', 'Inte inloggad');
-        document.getElementById('email').focus();
+        lockStatus('');
         return;
       }
       CLOUD.user = user; CLOUD.on = true;
+      lockStatus('Hämtar familjens resor …');
       try { await cloudFirstSync(); }
       catch(e){
+        lockStatus('');
         document.getElementById('pwErr').textContent =
           e.code === 'permission-denied'
             ? 'Kontot har inte behörighet till datat. Kontrollera Firestore-reglerna.'
             : 'Kunde inte hämta datat: ' + (e.code || e.message);
         return;
       }
+      lockStatus('');
       if(appEl.hidden) openApp(); else refreshAll();
       cloudWatch();
       cloudDot('on', 'Inloggad som ' + user.email);
