@@ -19,4 +19,11 @@ window.FIREBASE_CONFIG = {
   appId: "…"
 };
 */
-window.FIREBASE_CONFIG = null;
+window.FIREBASE_CONFIG = {
+  apiKey: "AIzaSyCwHQkNu1DRWNCckIHq3fftZOmAw0rHgxQ",
+  authDomain: "resekartan-3b126.firebaseapp.com",
+  projectId: "resekartan-3b126",
+  storageBucket: "resekartan-3b126.firebasestorage.app",
+  messagingSenderId: "650524119600",
+  appId: "1:650524119600:web:3b018b8fdbe7b1247f53f5"
+};
