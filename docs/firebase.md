@@ -76,11 +76,20 @@ Efter det syns ändringar direkt på alla enheter.
 Resorna ligger i ett dokument, `resekartan/data`, som en JSON-sträng i fältet
 `payload`, plus `updatedAt` och `updatedBy`.
 
-**Bilderna ligger för sig**, i subcollectionen `resekartan/data/foton`, ett
-dokument per bild. De skulle spränga huvuddokumentets gräns annars. Varje bild
-skalas ned till max 1400 px och komprimeras i webbläsaren innan den sparas, så
-den landar på ett par hundra kB. Firestores gratisnivå på 1 GiB räcker till
-tusentals bilder.
+**Bilderna ligger för sig**, i två subcollections. De skulle spränga
+huvuddokumentets gräns annars, och Firestore kan inte hämta delar av ett
+dokument – vill man läsa något lätt måste det ligga i en egen post.
+
+- `resekartan/data/foton/{id}` – uppgifterna om bilden plus `prev`, en
+  förhandsbild på 400 px (~30 kB). Det är den galleriet läser och visar.
+- `resekartan/data/bilder/{id}` – originalet, max 1400 px (~200 kB). Hämtas
+  först när någon öppnar bilden i helskärm.
+
+Uppdelningen kom i v21. Före den låg originalet i `foton`, vilket gjorde att en
+resa med tjugo bilder laddade flera megabyte bara för att rita rutnätet. Gamla
+bilder flyttas automatiskt, en i taget i bakgrunden, när resan öppnas.
+
+Firestores gratisnivå på 1 GiB räcker till tusentals bilder.
 
 Fältet `place` är tomt men finns med, så bilder kan knytas till en enskild ort
 längre fram utan att det som redan ligger inne behöver skrivas om.

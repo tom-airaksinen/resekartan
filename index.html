@@ -295,7 +295,10 @@ h2.sec:first-child{margin-top:8px}
 .photos h3 .cnt{font-weight:400;color:var(--ink-3);font-size:13px}
 .grid-ph{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:6px}
 .grid-ph figure{margin:0;position:relative;aspect-ratio:1;border-radius:10px;overflow:hidden;background:var(--surface-2);
-  touch-action:pan-y;user-select:none;-webkit-user-select:none}
+  touch-action:pan-y;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
+/* Utan callout:none öppnar iOS sin egen Dela/Spara-meny på långtryck, och då
+   kommer draget aldrig igång. */
+.grid-ph figure img{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}
 .grid-ph figure.drag{z-index:5;box-shadow:0 10px 26px rgba(0,0,0,.3);cursor:grabbing}
 .grid-ph img{width:100%;height:100%;object-fit:cover;display:block;cursor:zoom-in;-webkit-user-drag:none}
 .grid-ph .cover{display:none;position:absolute;left:5px;bottom:5px;padding:2px 8px;border-radius:999px;

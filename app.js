@@ -14,7 +14,7 @@ const AUTH = {
   hash: '5805d07268265f31365760d2aa2a450e97629e0d6a43c36829b54b3d971026c7'
 };
 const LS_KEY = 'resekartan.data', LS_AUTH = 'resekartan.unlocked';
-const APP_VERSION = 'v20';   // följ sw.js CACHE, så man ser vad som faktiskt körs
+const APP_VERSION = 'v21';   // följ sw.js CACHE, så man ser vad som faktiskt körs
 
 /* ============================ Tema ============================
    Temat är per enhet och ligger i localStorage, inte i DB – Hedvig ska kunna ha
@@ -436,18 +436,64 @@ function stats(list){
    länge men finns med, så bilder kan knytas till en enskild ort längre fram
    utan att det som redan ligger inne behöver skrivas om. */
 const PH_MAX_SIDE = 1400, PH_BUDGET = 700 * 1024;
+/* Förhandsbilden är det galleriet visar. Rutorna är drygt hundra punkter breda,
+   så 400 px räcker även på en trefaldig skärm – och en resa med tjugo bilder
+   väger då några hundra kB i stället för fjorton megabyte. */
+const PREV_SIDE = 400, PREV_Q = .7;
+
+function scaleUrl(url, side, q){
+  return new Promise(res => {
+    const img = new Image();
+    img.onload = () => {
+      const s = Math.min(1, side / Math.max(img.width, img.height));
+      const cv = document.createElement('canvas');
+      cv.width = Math.round(img.width * s); cv.height = Math.round(img.height * s);
+      cv.getContext('2d').drawImage(img, 0, 0, cv.width, cv.height);
+      res(cv.toDataURL('image/jpeg', q));
+    };
+    img.onerror = () => res(null);
+    img.src = url;
+  });
+}
 
 function idb(){
   return new Promise((res, rej) => {
-    const r = indexedDB.open('resekartan-foton', 1);
+    const r = indexedDB.open('resekartan-foton', 2);
     r.onupgradeneeded = () => {
       const db = r.result;
       if(!db.objectStoreNames.contains('foton')){
         db.createObjectStore('foton', { keyPath: 'id' }).createIndex('tripId', 'tripId');
       }
+      // v2: originalen flyttade hit, så galleriet kan läsa enbart förhandsbilderna
+      if(!db.objectStoreNames.contains('bilder')) db.createObjectStore('bilder', { keyPath: 'id' });
     };
     r.onsuccess = () => res(r.result);
     r.onerror = () => rej(r.error);
+    r.onblocked = () => rej(new Error('Bildlagringen är öppen i en annan flik.'));
+  });
+}
+async function idbGet(store, id){
+  const db = await idb();
+  return new Promise((res, rej) => {
+    const q = db.transaction(store).objectStore(store).get(id);
+    q.onsuccess = () => res(q.result || null);
+    q.onerror = () => rej(q.error);
+  });
+}
+async function idbPutIn(store, rec){
+  const db = await idb();
+  return new Promise((res, rej) => {
+    const q = db.transaction(store, 'readwrite').objectStore(store).put(rec);
+    q.onsuccess = () => res();
+    q.onerror = () => rej(q.error);
+  });
+}
+async function idbDelFrom(store, id){
+  const db = await idb();
+  return new Promise((res, rej) => {
+    const q = db.transaction(store, 'readwrite').objectStore(store).delete(id);
+    q.onsuccess = () => res();
+    q.onerror = () => rej(q.error);
   });
 }
 async function idbAll(tripId){
@@ -458,22 +504,8 @@ async function idbAll(tripId){
     tx.onerror = () => rej(tx.error);
   });
 }
-async function idbPut(rec){
-  const db = await idb();
-  return new Promise((res, rej) => {
-    const tx = db.transaction('foton', 'readwrite').objectStore('foton').put(rec);
-    tx.onsuccess = () => res();
-    tx.onerror = () => rej(tx.error);
-  });
-}
-async function idbDel(id){
-  const db = await idb();
-  return new Promise((res, rej) => {
-    const tx = db.transaction('foton', 'readwrite').objectStore('foton').delete(id);
-    tx.onsuccess = () => res();
-    tx.onerror = () => rej(tx.error);
-  });
-}
+const idbPut = rec => idbPutIn('foton', rec);
+const idbDel = id => idbDelFrom('foton', id);
 
 const photoId = () => 'p' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 const byOrd = (a, b) => (a.ord ?? 9e9) - (b.ord ?? 9e9) || (a.addedAt || '').localeCompare(b.addedAt || '');
@@ -522,28 +554,75 @@ const photos = {
     }
     list.forEach((p, i) => { p.ord = i; });
   },
+  /* Originalet skrivs först. Dör nätet mitt i finns bilden kvar, och posten i
+     foton skapas nästa gång – tvärtom hade gett en rad utan bild bakom. */
   async add(tripId, file){
     const { url, w, h } = await shrink(file);
-    const rec = { id: photoId(), tripId, place: null, url, w, h,
-                  addedAt: new Date().toISOString(), addedBy: CLOUD.user?.email || null };
+    const prev = await scaleUrl(url, PREV_SIDE, PREV_Q) || url;
+    const id = photoId();
+    const meta = { tripId, place: null, prev, w, h,
+                   addedAt: new Date().toISOString(), addedBy: CLOUD.user?.email || null };
     if(CLOUD.on){
       const { store } = CLOUD.mod;
-      const { id, ...data } = rec;
-      await store.setDoc(store.doc(CLOUD.db, 'resekartan', 'data', 'foton', id), data);
+      await store.setDoc(store.doc(CLOUD.db, 'resekartan', 'data', 'bilder', id), { url });
+      await store.setDoc(store.doc(CLOUD.db, 'resekartan', 'data', 'foton', id), meta);
     } else {
-      await idbPut(rec);
+      await idbPutIn('bilder', { id, url });
+      await idbPut({ id, ...meta });
     }
-    return rec;
+    return { id, ...meta };
+  },
+  /* Originalet i full storlek – hämtas bara när någon öppnar bilden. */
+  async full(id){
+    if(CLOUD.on){
+      const { store } = CLOUD.mod;
+      const d = await store.getDoc(store.doc(CLOUD.db, 'resekartan', 'data', 'bilder', id));
+      return d.exists() ? d.data().url : null;
+    }
+    return (await idbGet('bilder', id))?.url || null;
+  },
+  /* Flyttar en bild från före v21, där originalet låg i samma post som resten,
+     till den nya uppdelningen. En bild i taget: avbryts det halvvägs är den
+     bilden antingen flyttad eller orörd, aldrig trasig. */
+  async split(p){
+    if(CLOUD.on){
+      const { store } = CLOUD.mod;
+      await store.setDoc(store.doc(CLOUD.db, 'resekartan', 'data', 'bilder', p.id), { url: p.url });
+      await store.updateDoc(store.doc(CLOUD.db, 'resekartan', 'data', 'foton', p.id),
+        { prev: p.prev, url: store.deleteField() });
+    } else {
+      await idbPutIn('bilder', { id: p.id, url: p.url });
+      const { url, ...rest } = p;
+      await idbPut(rest);
+    }
+    delete p.url;
   },
   async remove(id){
     if(CLOUD.on){
       const { store } = CLOUD.mod;
       await store.deleteDoc(store.doc(CLOUD.db, 'resekartan', 'data', 'foton', id));
+      await store.deleteDoc(store.doc(CLOUD.db, 'resekartan', 'data', 'bilder', id));
     } else {
       await idbDel(id);
+      await idbDelFrom('bilder', id);
     }
   }
 };
+
+/* Bilder som lades in före v21 har originalet kvar i sin post. De får en
+   förhandsbild i bakgrunden, en i taget, utan att någon behöver vänta. */
+async function migratePhotos(tripId, list){
+  const gamla = list.filter(p => p.url && !p.prev);
+  if(!gamla.length) return;
+  for(const p of gamla){
+    try {
+      p.prev = await scaleUrl(p.url, PREV_SIDE, PREV_Q);
+      if(!p.prev){ delete p.prev; continue; }
+      await photos.split(p);
+    } catch(e){ return; }        // nätet eller lagringen strular – nästa gång
+  }
+  if(phTrip === tripId) renderPhotos();
+}
 
 /* ============================ Kartan ============================ */
 const svg = d3.select('#map'), gWorld = d3.select('#world');
@@ -936,7 +1015,7 @@ async function syncThumb(tripId, list){
     delete t.thumb; delete t.thumbOf;
   } else {
     if(t.thumbOf === hero.id && t.thumb) return;
-    const url = await makeThumb(hero.url);
+    const url = await makeThumb(hero.prev || hero.url);
     if(!url) return;
     t.thumb = url; t.thumbOf = hero.id;
   }
@@ -1031,7 +1110,7 @@ function renderPhotos(){
   if(cnt) cnt.textContent = phCache.length ? `${phCache.length} ${phCache.length === 1 ? 'bild' : 'bilder'}` : '';
   box.innerHTML = `<div class="grid-ph" id="phGrid">${phCache.map((p, i) =>
     `<figure data-id="${esc(p.id)}"${i === 0 ? ' class="hero"' : ''}>
-      <img src="${p.url}" alt="Bild ${i + 1} från resan" loading="lazy" data-open="${i}" draggable="false">
+      <img src="${p.prev || p.url}" alt="Bild ${i + 1} från resan" loading="lazy" data-open="${i}" draggable="false">
       <span class="cover">Omslag</span>
       <button type="button" class="rm" data-rm="${esc(p.id)}" aria-label="Ta bort bilden">
         <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></figure>`).join('')}${addTile}</div>
@@ -1092,6 +1171,10 @@ async function phDragEnd(){
   catch(e){ toast('Kunde inte spara ordningen.'); }
   await syncThumb(phTrip, phCache);
 }
+// iOS visar annars sin egen Dela/Spara-meny när man håller på en bild, och då
+// går ordningen inte att ändra. -webkit-touch-callout i index.html tar hand om
+// resten; den här fångar högerklick och de fall där menyn ändå försöker fram.
+document.addEventListener('contextmenu', e => { if(e.target.closest?.('#phGrid figure')) e.preventDefault(); });
 document.addEventListener('pointerdown', e => {
   const fig = e.target.closest?.('#phGrid figure');
   if(!fig || e.button > 0 || e.target.closest('.rm')) return;
@@ -1125,6 +1208,7 @@ async function loadPhotos(tripId){
     phCache = list;
     renderPhotos();
     syncThumb(tripId, list);      // fyller i omslaget för gallerier som lades in före v19
+    migratePhotos(tripId, list);  // och delar upp bilder som lades in före v21
   } catch(e){
     const box = document.getElementById('phBody');
     if(box) box.innerHTML = `<p class="ph-empty">${
@@ -1193,13 +1277,34 @@ function openViewer(i){
   vIdx = i; viewerEl.hidden = false; paintViewer();
 }
 function closeViewer(){ viewerEl.hidden = true; }
+/* Originalen för den här sessionen. Bläddrar man fram och tillbaka ska samma
+   bild inte hämtas om. */
+const fullCache = new Map();
+async function loadFull(p){
+  if(!p) return null;
+  if(p.url) return p.url;
+  if(fullCache.has(p.id)) return fullCache.get(p.id);
+  const url = await photos.full(p.id).catch(() => null);
+  if(url) fullCache.set(p.id, url);
+  return url;
+}
 function paintViewer(){
   const p = phCache[vIdx];
   if(!p) return closeViewer();
-  document.getElementById('vImg').src = p.url;
-  document.getElementById('vCount').textContent = `${vIdx + 1} / ${phCache.length}`;
+  const img = document.getElementById('vImg'), cnt = document.getElementById('vCount');
+  const nr = `${vIdx + 1} / ${phCache.length}`;
+  img.src = p.prev || p.url || '';
+  cnt.textContent = p.url ? nr : `${nr} · laddar …`;
   document.getElementById('vPrev').disabled = vIdx === 0;
   document.getElementById('vNext').disabled = vIdx >= phCache.length - 1;
+  if(p.url) return;
+  loadFull(p).then(url => {
+    // Användaren kan ha bläddrat vidare under tiden
+    if(viewerEl.hidden || phCache[vIdx]?.id !== p.id) return;
+    if(url) img.src = url;
+    cnt.textContent = url ? nr : `${nr} · kunde inte hämta bilden`;
+    loadFull(phCache[vIdx + 1]);        // nästa i förväg, så bläddringen känns direkt
+  });
 }
 const step = d => { vIdx = Math.min(phCache.length - 1, Math.max(0, vIdx + d)); paintViewer(); };
 document.getElementById('vClose').onclick = closeViewer;

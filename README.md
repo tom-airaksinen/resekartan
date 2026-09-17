@@ -87,6 +87,26 @@ som är id:t den gjordes av) – inte bland bilderna. Det är med flit:
 `syncThumb()` håller den aktuell: efter uppladdning, borttagning, omordning och
 när ett galleri från före v19 öppnas första gången.
 
+### Bilderna: förhandsbild och original
+
+Galleriet visar en förhandsbild på 400 px, inte originalet. Originalet på max
+1400 px hämtas först när man öppnar bilden i helskärm, och visaren målar upp
+förhandsbilden direkt medan den väntar. En resa med tjugo bilder laddar därmed
+några hundra kB i stället för flera megabyte.
+
+Det kräver att de ligger i **skilda poster** – Firestore hämtar alltid hela
+dokument, och en stor IndexedDB-post kostar minne även lokalt:
+
+| Var | Innehåll |
+| --- | --- |
+| `foton` | uppgifter om bilden + `prev` (400 px) |
+| `bilder` | `url`, originalet (1400 px) |
+
+Bilder som lades in före v21 har originalet kvar i `foton`. De flyttas
+automatiskt, en i taget i bakgrunden, när resan öppnas. Originalet skrivs alltid
+före posten som pekar på det, så ett avbrutet nät aldrig lämnar en bildruta utan
+bild bakom.
+
 ### Dra för att ändra ordning
 
 HTML5:s drag and drop finns inte på touch, så galleriet använder pointer-händelser
@@ -94,10 +114,14 @@ HTML5:s drag and drop finns inte på touch, så galleriet använder pointer-hän
 räcker det att dra fem pixlar. Rör sig fingret mer än åtta pixlar innan långtrycket
 gått är det en skrollning, och draget avbryts.
 
-Två fällor: `touch-action` på rutorna är `pan-y` så sidan fortfarande går att
-skrolla, och skrollningen under ett pågående drag stoppas av en egen
-`touchmove`-lyssnare med `passive: false` – `preventDefault` på pointer-händelser
-gör ingenting åt saken.
+Tre fällor:
+
+- `touch-action` på rutorna är `pan-y` så sidan fortfarande går att skrolla.
+- Skrollningen under ett pågående drag stoppas av en egen `touchmove`-lyssnare
+  med `passive: false`. `preventDefault` på pointer-händelser gör ingenting åt
+  saken.
+- **`-webkit-touch-callout: none` måste sitta på bildrutorna.** Utan den öppnar
+  iOS sin egen Dela/Spara-meny på långtryck, och draget kommer aldrig igång.
 
 ### Två CSS-fällor värda att minnas
 
