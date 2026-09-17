@@ -14,7 +14,7 @@ const AUTH = {
   hash: '5805d07268265f31365760d2aa2a450e97629e0d6a43c36829b54b3d971026c7'
 };
 const LS_KEY = 'resekartan.data', LS_AUTH = 'resekartan.unlocked', LS_SEEN = 'resekartan.inloggad';
-const APP_VERSION = 'v24';   // följ sw.js CACHE, så man ser vad som faktiskt körs
+const APP_VERSION = 'v25';   // följ sw.js CACHE, så man ser vad som faktiskt körs
 
 /* ============================ Tema ============================
    Temat är per enhet och ligger i localStorage, inte i DB – Hedvig ska kunna ha
@@ -65,14 +65,31 @@ function showLockForm(lead){
   // Bara med mus: på telefonen skulle tangentbordet hoppa upp vid varje start
   if(matchMedia('(hover: hover)').matches) document.getElementById('pw').focus();
 }
-const sett = () => { try { return localStorage.getItem(LS_SEEN) === '1'; } catch(e){ return false; } };
+/* Har den här enheten varit inne i appen förut? Då ska starten vänta tyst i
+   stället för att visa ett inloggningsformulär man ändå inte behöver. Tre spår,
+   för att en ny flagga är tom första gången och då hade formuläret blinkat
+   förbi en sista gång: vår egen flagga, Firebases sparade inloggning, och att
+   det redan ligger resor sparade här. */
+const sett = () => {
+  try {
+    if(localStorage.getItem(LS_SEEN) === '1') return true;
+    if(localStorage.getItem(LS_KEY)) return true;
+    return Object.keys(localStorage).some(k => k.startsWith('firebase:authUser:'));
+  } catch(e){ return false; }
+};
 const setSett = v => { try { v ? localStorage.setItem(LS_SEEN, '1') : localStorage.removeItem(LS_SEEN); } catch(e){} };
 
+/* Texten dyker upp först efter en stund. Går starten fort ser man bara loggan
+   och sedan kartan, i stället för tre rader text som hinner avlösa varandra. */
+let statusTimer = null;
 function lockStatus(text){
   const box = document.getElementById('pwStatus');
   if(!box) return;
-  box.hidden = !text;
-  if(text) document.getElementById('pwStatusText').textContent = text;
+  clearTimeout(statusTimer);
+  if(!text){ box.hidden = true; return; }
+  document.getElementById('pwStatusText').textContent = text;
+  if(!box.hidden) return;                       // redan framme, byt bara texten
+  statusTimer = setTimeout(() => { box.hidden = false; }, 700);
 }
 /* Låsskärmen ligger kvar tills första ritningen är klar. Annars står man en stund
    framför en tom app och undrar om den hängt sig – och kraschar uppstarten blir det
@@ -85,7 +102,8 @@ function openApp(){
     try {
       start();
       lockStatus('');
-      lockEl.hidden = true;
+      lockEl.classList.add('klar');
+      setTimeout(() => { lockEl.hidden = true; lockEl.classList.remove('klar'); }, 260);
     } catch(e){
       lockStatus('');
       appEl.hidden = true;
@@ -2785,7 +2803,7 @@ function registerSW(){
   // Har den här enheten aldrig varit inloggad finns inget att vänta på
   if(!sett()) showLockForm(LEAD);
   // Svarar inloggningen inte alls ska man ändå kunna göra något
-  const nödutgång = setTimeout(() => { if(appEl.hidden) showLockForm(LEAD); }, 8000);
+  const nödutgång = setTimeout(() => { if(appEl.hidden) showLockForm(LEAD); }, 12000);
   cloudDot('', 'Kopplar upp …');
   lockStatus('Kopplar upp mot molnet …');
   try {

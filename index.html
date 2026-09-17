@@ -85,7 +85,10 @@ button:focus-visible,[tabindex]:focus-visible,input:focus-visible,select:focus-v
 [hidden]{display:none!important}
 
 /* ---------- Lås ---------- */
-#lock{position:fixed;inset:0;z-index:50;display:grid;place-items:center;background:var(--ocean);padding:24px}
+#lock{position:fixed;inset:0;z-index:50;display:grid;place-items:center;background:var(--ocean);padding:24px;
+  transition:opacity .26s ease}
+#lock.klar{opacity:0;pointer-events:none}
+@media (prefers-reduced-motion: reduce){ #lock{transition:none} }
 #lock .box{width:100%;max-width:340px;background:var(--surface);border-radius:18px;padding:28px 22px;box-shadow:0 12px 40px rgba(27,39,51,.16);text-align:center}
 #lock h1{font-size:24px;margin-bottom:4px}
 #lock p{color:var(--ink-2);font-size:14px;margin:0 0 14px}

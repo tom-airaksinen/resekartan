@@ -156,10 +156,18 @@ Formuläret ligger dolt i markupen och visas först när någon faktiskt behöve
 in. Tidigare blinkade ett lösenordsfält förbi vid varje start medan Firebase
 laddades, fast man redan var inloggad.
 
-`resekartan.inloggad` i `localStorage` minns att enheten varit inne. Är den satt
-väntar appen tyst med bara loggan; är den inte det visas formuläret direkt, för då
-finns inget att vänta på. Tre saker tar fram formuläret: att inloggningen svarar
-att ingen är inloggad, att något går fel, eller att åtta sekunder gått utan besked.
+`sett()` avgör om enheten varit inne förut. Den tittar på tre saker, för en ny
+flagga är tom första gången och då hade formuläret blinkat förbi en sista gång:
+`resekartan.inloggad`, Firebases egen sparade inloggning (`firebase:authUser:…`),
+och om det redan ligger resor i `resekartan.data`. Stämmer något av dem väntar
+appen tyst med bara loggan; annars visas formuläret direkt, för då finns inget att
+vänta på.
+
+Tre saker tar fram formuläret: att inloggningen svarar att ingen är inloggad, att
+något går fel, eller att tolv sekunder gått utan besked.
+
+Statusraden under loggan dyker upp först efter 700 ms. Går starten fort ser man
+bara loggan och sedan kartan, i stället för tre rader text som avlöser varandra.
 
 Kortet står kvar när formuläret dyker upp, så startbilden växer till en
 inloggningsruta i stället för att bytas ut.
