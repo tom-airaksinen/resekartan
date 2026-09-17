@@ -55,6 +55,26 @@ Kartan går att zooma till 400×. Så nära blir kustlinjerna kantiga – 50m-da
 inte den detaljen – men pluppar, ortsnamn och linjer håller sin storlek hela vägen
 eftersom allt som ritas ovanpå skalas med `1/k` i `rescale()`.
 
+### Teman
+
+Två teman: **Standard** (som förut) och **Hedvig** (rosa), under Inställningar →
+Utseende. Valet ligger i `localStorage` per enhet, aldrig i `DB`, så Hedvigs rosa
+inte följer med till de andras telefoner via molnet.
+
+Allt är CSS-variabler. Standard sätter ingen `data-theme` alls och följer därför
+systemets ljusa/mörka läge som tidigare. Rosa sätter `data-theme="rosa"` och är
+bara ljust – därför är den mörka media-frågan i `index.html` undantagen med
+`:not([data-theme="rosa"])`. Missar man det undantaget när ett tema läggs till
+ritas det mörka temats färger ovanpå det nya i en telefon som står i mörkt läge.
+
+### Miniatyrer i reselistorna
+
+En resa med minst en bild visar den första bilden i stället för flaggan i
+Senaste resor och Alla resor. `photos.first()` läser **en** post per resa (markör
+i IndexedDB, `limit(1)` i Firestore) – hela galleriet vore hundratals kB per resa.
+Bilden skalas ned till 128 px i `makeThumb()` innan den läggs i DOM:en; en
+1400 px-JPEG per rad skulle äta tiotals megabyte i en lång lista.
+
 ### Två CSS-fällor värda att minnas
 
 **CSS vinner över presentationsattribut.** Kartans linjebredder räknas fram per

@@ -20,3 +20,11 @@
 - [x] Räknas en avstickare (Mexiko en natt, Gibraltar) som "besökt land" i statistiken? → **Svar:** Ja. Men det ska synas att den hör till huvudresan (Kalifornien). (2026-09-16)
 - [x] Räknas Gibraltar som eget land eller som Storbritannien? → **Svar:** Eget land – "special-territorier" som Gibraltar och Macau räknas för sig, det är det roliga. (2026-09-16)
 - [x] Ska en avstickare ha egna datum/deltagare, eller ärver den resans? → **Svar:** Ärver som default, men kan överstyras per avstickare. (2026-09-16)
+
+## Design
+- [ ] Vilket designspår ska appen ha? Prototyp med fyra spår (Papper, Skymning, Stugan, Hedvig/rosa), temaväljare och fyra ikonförslag: https://claude.ai/artifact/9UVgb82rs82TwCb8uxK3v5 (2026-09-17)
+- [x] Ska temat vara valbart per enhet (Inställningar → Utseende) eller ett gemensamt utseende för alla? Hedvig vill ha rosa. → **Svar:** Valbart per enhet. Byggt 2026-09-17: två teman, Standard och Hedvig (rosa), under Inställningar → Utseende. Valet ligger i `localStorage` och följer inte med till molnet. Rosa är bara ljust; Standard följer systemets ljusa/mörka läge som förut. (2026-09-17)
+- [ ] Ska fler teman byggas (Skymning, Stugan från prototypen)?
+- [ ] Ny hemskärmsikon – vilken av de fyra? Genomskinlig bakgrund går inte på iOS (fylls svart), så ikonen behöver en designad bakgrund.
+- [ ] Fotobaserad design (thumbnails i listor, hero-bild i resedetaljen)? Inspo och konsekvenser i `docs/inspo/fotobaserad.md`. Kräver drag and drop för bildordning. (2026-09-17)
+- [ ] Miniatyrer i reselistorna: första bilden visas till vänster i Senaste resor och Alla resor när resan har minst en bild. Byggt 2026-09-17 som test. Rader utan bild behåller flaggan i en smalare ruta, så vänsterkanten blir ojämn i blandade listor – behåll, eller ge alla rader samma bredd? (2026-09-17)

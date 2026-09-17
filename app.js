@@ -14,7 +14,35 @@ const AUTH = {
   hash: '5805d07268265f31365760d2aa2a450e97629e0d6a43c36829b54b3d971026c7'
 };
 const LS_KEY = 'resekartan.data', LS_AUTH = 'resekartan.unlocked';
-const APP_VERSION = 'v16';   // följ sw.js CACHE, så man ser vad som faktiskt körs
+const APP_VERSION = 'v18';   // följ sw.js CACHE, så man ser vad som faktiskt körs
+
+/* ============================ Tema ============================
+   Temat är per enhet och ligger i localStorage, inte i DB – Hedvig ska kunna ha
+   rosa i sin telefon utan att de andras appar ändras. "Standard" sätter ingen
+   data-theme alls, så ljust/mörkt följer systemet precis som förut. Rosa är
+   bara ljust och står utanför den mörka media-frågan (se index.html). */
+const LS_TEMA = 'resekartan.tema';
+const TEMAN = {
+  standard: { name: 'Standard', desc: 'Hav, papper och marinblått', color: '#D3E2EA',
+              prev: { sea: '#D3E2EA', land: '#EDE9E0', vis: '#2B4F84', surf: '#FBFAF7', acc: '#E4572E' } },
+  rosa:     { name: 'Hedvig', desc: 'Rosé och hallon', color: '#F7D9E1',
+              prev: { sea: '#F7D9E1', land: '#FFF8F2', vis: '#D6336C', surf: '#FFF6F7', acc: '#E0407A' } }
+};
+const temaNu = () => { try { const t = localStorage.getItem(LS_TEMA); return TEMAN[t] ? t : 'standard'; } catch(e){ return 'standard'; } };
+function setTema(t, save = true){
+  if(!TEMAN[t]) t = 'standard';
+  if(t === 'standard') delete document.documentElement.dataset.theme;
+  else document.documentElement.dataset.theme = t;
+  // Adressfältets färg: en metatagg utan media vinner över de två media-styrda
+  let m = document.getElementById('temaColor');
+  if(t === 'standard'){ m?.remove(); }
+  else {
+    if(!m){ m = document.createElement('meta'); m.id = 'temaColor'; m.name = 'theme-color'; document.head.appendChild(m); }
+    m.content = TEMAN[t].color;
+  }
+  if(save){ try { localStorage.setItem(LS_TEMA, t); } catch(e){} }
+}
+setTema(temaNu(), false);
 
 async function derive(pw){
   if(!crypto?.subtle) throw new Error('nocrypto');
@@ -479,6 +507,24 @@ const photos = {
     }
     return (await idbAll(tripId)).sort((a, b) => (a.addedAt || '').localeCompare(b.addedAt || ''));
   },
+  /* Första bilden i en resa, utan att läsa in hela galleriet. Både markören och
+     Firestores standardordning går på id, och photoId() börjar med tidsstämpeln,
+     så den första posten är den äldsta bilden. */
+  async first(tripId){
+    if(CLOUD.on){
+      const { store } = CLOUD.mod;
+      const col = store.collection(CLOUD.db, 'resekartan', 'data', 'foton');
+      const snap = await store.getDocs(store.query(col, store.where('tripId', '==', tripId), store.limit(1)));
+      const d = snap.docs[0];
+      return d ? { id: d.id, ...d.data() } : null;
+    }
+    const db = await idb();
+    return new Promise((res, rej) => {
+      const q = db.transaction('foton').objectStore('foton').index('tripId').openCursor(IDBKeyRange.only(tripId));
+      q.onsuccess = () => res(q.result?.value || null);
+      q.onerror = () => rej(q.error);
+    });
+  },
   async add(tripId, file){
     const { url, w, h } = await shrink(file);
     const rec = { id: photoId(), tripId, place: null, url, w, h,
@@ -835,12 +881,67 @@ function defaultFrac(){
   return .5;
 }
 
+/* ---- Miniatyrer i reselistorna ----
+   En resa med minst en bild visar bilden i stället för flaggan. Bilderna är upp
+   till 1400 px breda och skulle äta minne i en lång lista, så varje rad får en
+   egen 128 px-kopia. Kopiorna ligger i minnet tills sidan laddas om. */
+const THUMB_SIDE = 128;
+const thumbs = new Map();        // resa-id → dataURL, eller null för "har ingen bild"
+const thumbBusy = new Set();
+
+function makeThumb(url){
+  return new Promise(res => {
+    const img = new Image();
+    img.onload = () => {
+      // Beskär mitten till en kvadrat, som object-fit:cover gör i rutan
+      const s = THUMB_SIDE / Math.min(img.width, img.height);
+      const w = img.width * s, h = img.height * s;
+      const cv = document.createElement('canvas');
+      cv.width = cv.height = THUMB_SIDE;
+      cv.getContext('2d').drawImage(img, (THUMB_SIDE - w) / 2, (THUMB_SIDE - h) / 2, w, h);
+      res(cv.toDataURL('image/jpeg', .72));
+    };
+    img.onerror = () => res(null);
+    img.src = url;
+  });
+}
+/* Byter flaggan mot bilden i raderna som redan står på skärmen, så listan inte
+   behöver ritas om när bilden kommer fram. */
+function paintThumb(id, url){
+  document.querySelectorAll(`.trip[data-trip="${CSS.escape(id)}"]`).forEach(row => {
+    const img = row.querySelector('.thumb img');
+    if(img){ img.src = url; return; }
+    const flag = row.querySelector('.flag');
+    if(!flag) return;
+    const emoji = flag.textContent;
+    flag.outerHTML = `<span class="thumb"><img src="${url}" alt=""></span>`;
+    row.querySelector('b')?.insertAdjacentHTML('afterbegin', `<span class="rowflag">${emoji}</span>`);
+    row.classList.add('has-thumb');
+  });
+}
+function fillThumbs(){
+  new Set([...document.querySelectorAll('.trip[data-trip]')].map(b => b.dataset.trip)).forEach(async id => {
+    if(thumbs.has(id) || thumbBusy.has(id)) return;
+    thumbBusy.add(id);
+    try {
+      const rec = await photos.first(id);
+      const url = rec?.url ? await makeThumb(rec.url) : null;
+      thumbs.set(id, url);
+      if(url) paintThumb(id, url);
+    } catch(e){
+      thumbs.set(id, null);      // lagringen tiger – visa flaggan och låt det vara
+    } finally { thumbBusy.delete(id); }
+  });
+}
+
 const tripRow = t => {
   const first = t.stops[0];
   const extra = t.stops.slice(1).map(s => countryName(s.iso)).join(', ');
-  return `<button class="trip${t.planned ? ' planned' : ''}" data-trip="${esc(t.id)}">
-    <span class="flag">${first ? flagOf(first.iso) : '🏳️'}</span>
-    <span><b>${esc(t.title)}${t.planned ? '<span class="tag">Planerad</span>' : ''}${extra ? `<span class="tag side">+ ${esc(extra)}</span>` : ''}</b><small>${span(t.start, t.end)}</small></span>
+  const flag = first ? flagOf(first.iso) : '🏳️';
+  const th = thumbs.get(t.id);
+  return `<button class="trip${t.planned ? ' planned' : ''}${th ? ' has-thumb' : ''}" data-trip="${esc(t.id)}">
+    ${th ? `<span class="thumb"><img src="${th}" alt=""></span>` : `<span class="flag">${flag}</span>`}
+    <span><b>${th ? `<span class="rowflag">${flag}</span>` : ''}${esc(t.title)}${t.planned ? '<span class="tag">Planerad</span>' : ''}${extra ? `<span class="tag side">+ ${esc(extra)}</span>` : ''}</b><small>${span(t.start, t.end)}</small></span>
     ${avs(t.who)}</button>`;
 };
 /* Fyra tal på en rad. Etiketterna är korta i arket där de ska rymmas bredvid
@@ -869,6 +970,7 @@ function renderSheet(){
     `<h2 class="sec">Senaste resor</h2>` +
     (past.length ? past.map(tripRow).join('') : '<p class="example">Inga resor ännu med det här filtret.</p>') +
     seedNote();
+  fillThumbs();
 }
 
 const ICON = {
@@ -979,6 +1081,7 @@ phInput.addEventListener('change', async () => {
     done++;
   }
   if(phTrip === tripAtStart) renderPhotos();
+  thumbs.delete(tripAtStart); fillThumbs();
   toast(failed
     ? `${done - failed} av ${files.length} bilder tillagda, ${failed} misslyckades.`
     : done === 1 ? '1 bild tillagd.' : `${done} bilder tillagda.`);
@@ -989,6 +1092,7 @@ async function removePhoto(id){
   try {
     await photos.remove(id);
     phCache = phCache.filter(p => p.id !== id);
+    thumbs.delete(phTrip); fillThumbs();
     renderPhotos();
     if(!viewerEl.hidden) closeViewer();
     toast('Bilden är borttagen.');
@@ -1082,6 +1186,7 @@ async function removeTrip(id){
   if(!t) return;
   if(!await ask(`Ta bort resan "${t.title}"? Det går inte att ångra.`, 'Ta bort')) return;
   DB.trips = DB.trips.filter(x => x.id !== id);
+  thumbs.delete(id);
   saveDB(); sel = null;
   if(!editor.hidden) closeEditor();
   refreshAll();
@@ -1089,6 +1194,119 @@ async function removeTrip(id){
   // Bilderna hör till resan och ska inte bli kvar som skräp
   try { (await photos.list(id)).forEach(p => photos.remove(p.id)); } catch(e){}
 }
+
+/* ============================ Sök ============================
+   Ett fält som söker på resenamn, platser och länder bland de inlagda resorna.
+   Finns på tre ställen (förstoringsglaset på kartan, överst i Resor och Länder)
+   men är samma komponent: markup från searchMarkup(), händelser delegerade
+   på document så fälten överlever att vyerna ritas om. */
+const SEARCH_SVG = '<svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4.2-4.2"/></svg>';
+const searchMarkup = id => `<div class="srch" id="${id}"><div class="in">${SEARCH_SVG}<input type="search" placeholder="Sök resa, plats eller land" autocomplete="off" autocorrect="off" spellcheck="false" enterkeyhint="search" aria-label="Sök resa, plats eller land"><button class="clr" type="button" aria-label="Rensa" hidden><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div><div class="srch-res" role="listbox" hidden></div></div>`;
+
+// Åre och "are" ska hitta varandra: fäll ihop diakriter och skiftläge
+const fold = s => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+
+function searchIndex(){
+  const out = [], byIso = {};
+  DB.trips.forEach(t => {
+    const year = (t.start || '').slice(0, 4);
+    const lands = t.stops.map(s => countryName(s.iso)).join(', ');
+    out.push({ kind: 'resa', label: t.title, sub: `${span(t.start, t.end)}${lands ? ' · ' + lands : ''}`,
+      flag: t.stops[0] ? flagOf(t.stops[0].iso) : '🏳️', go: () => showTrip(t.id) });
+    t.stops.forEach(s => {
+      const o = byIso[s.iso] ??= { n: 0 };
+      if(!t.planned) o.n++;
+      (s.places || []).forEach(p => p.name && out.push({ kind: 'plats', label: p.name,
+        sub: `${countryName(s.iso)} · ${t.title}${year ? ' ' + year : ''}`, flag: flagOf(s.iso), go: () => showTrip(t.id) }));
+    });
+  });
+  Object.entries(byIso).forEach(([iso, o]) => out.push({ kind: 'land', label: countryName(iso),
+    sub: o.n ? `${o.n} ${o.n === 1 ? 'resa' : 'resor'}` : 'planerad resa', flag: flagOf(iso), go: () => showCountry(iso) }));
+  return out;
+}
+function searchHits(q){
+  const f = fold(q.trim());
+  if(!f) return [];
+  const rank = { land: 0, resa: 1, plats: 2 };
+  return searchIndex()
+    .map(e => { const l = fold(e.label), i = l.indexOf(f); return i < 0 ? null : { e, i, word: (i === 0 || l[i - 1] === ' ') ? 0 : 1 }; })
+    .filter(Boolean)
+    // ordbörjan först, sen tidig träff, sen land → resa → plats
+    .sort((a, b) => a.word - b.word || a.i - b.i || rank[a.e.kind] - rank[b.e.kind] || a.e.label.localeCompare(b.e.label, 'sv'))
+    .slice(0, 8).map(h => h.e);
+}
+function highlight(label, q){
+  const f = fold(q.trim()), i = fold(label).indexOf(f);
+  if(i < 0) return esc(label);
+  return esc(label.slice(0, i)) + '<mark>' + esc(label.slice(i, i + f.length)) + '</mark>' + esc(label.slice(i + f.length));
+}
+function paintSearch(box){
+  const input = box.querySelector('input'), res = box.querySelector('.srch-res');
+  const q = input.value;
+  box.querySelector('.clr').hidden = !q;
+  box._act = -1;
+  if(!q.trim()){ box._hits = []; res.hidden = true; res.innerHTML = ''; return; }
+  const hits = box._hits = searchHits(q);
+  res.hidden = false;
+  res.innerHTML = hits.length
+    ? hits.map((h, i) => `<button type="button" role="option" data-i="${i}" aria-selected="false">
+        <span class="flag">${h.flag}</span><span><b>${highlight(h.label, q)}</b><small>${esc(h.sub)}</small></span><span class="kind">${h.kind}</span></button>`).join('')
+    : `<p class="msg">Inget som heter “${esc(q.trim())}” bland resorna.</p>`;
+}
+function markActive(box){
+  box.querySelectorAll('.srch-res [role=option]').forEach((b, i) => b.setAttribute('aria-selected', String(i === box._act)));
+}
+const topEl = document.getElementById('top');
+function closeSearch(box){
+  const input = box.querySelector('input');
+  input.value = ''; paintSearch(box); input.blur();
+  if(box.id === 'mapSearch') topEl.classList.remove('searching');
+}
+function pickSearch(box, i){
+  const h = box._hits?.[i];
+  if(!h) return;
+  closeSearch(box);
+  h.go();
+}
+document.addEventListener('input', e => {
+  const box = e.target.closest?.('.srch');
+  if(box && e.target.tagName === 'INPUT') paintSearch(box);
+});
+document.addEventListener('focusin', e => {
+  const box = e.target.closest?.('.srch');
+  if(box && e.target.tagName === 'INPUT' && e.target.value.trim()) box.querySelector('.srch-res').hidden = false;
+});
+document.addEventListener('keydown', e => {
+  const box = e.target.closest?.('.srch');
+  if(!box) return;
+  const hits = box._hits || [];
+  if(e.key === 'ArrowDown' || e.key === 'ArrowUp'){
+    if(!hits.length) return;
+    e.preventDefault();
+    box._act = ((box._act ?? -1) + (e.key === 'ArrowDown' ? 1 : -1) + hits.length) % hits.length;
+    markActive(box);
+  } else if(e.key === 'Enter'){
+    e.preventDefault();
+    if(hits.length) pickSearch(box, box._act >= 0 ? box._act : 0);
+  } else if(e.key === 'Escape'){
+    closeSearch(box);
+  }
+});
+document.addEventListener('click', e => {
+  const opt = e.target.closest('.srch-res [role=option]');
+  if(opt){ pickSearch(opt.closest('.srch'), +opt.dataset.i); return; }
+  const clr = e.target.closest('.srch .clr');
+  if(clr){ const box = clr.closest('.srch'), inp = box.querySelector('input'); inp.value = ''; paintSearch(box); inp.focus(); return; }
+  if(e.target.closest('#searchBtn')){
+    closeWho();
+    topEl.classList.add('searching');
+    document.querySelector('#mapSearch input').focus();
+    return;
+  }
+  if(e.target.closest('#searchCancel')){ closeSearch(document.getElementById('mapSearch')); return; }
+  // Tryck utanför fäller ihop listan; texten står kvar och listan kommer tillbaka vid fokus
+  document.querySelectorAll('.srch-res:not([hidden])').forEach(r => { if(!r.closest('.srch').contains(e.target)) r.hidden = true; });
+});
 
 /* ============================ Vyer ============================ */
 function renderViews(){
@@ -1101,7 +1319,7 @@ function renderViews(){
       <div style="display:flex;gap:8px">
         <button class="btn ghost" id="importTrips">Importera</button>
         <button class="btn primary" id="newTrip">+ Ny resa</button>
-      </div></div>` +
+      </div></div>` + searchMarkup('searchResor') +
     (sorted.length
       ? Object.keys(byYear).sort().reverse().map(y => `<h2 class="sec">${y}</h2>${byYear[y].map(tripRow).join('')}`).join('')
       : '<p class="example">Inga resor ännu. Tryck på “Ny resa”.</p>') + seedNote();
@@ -1172,7 +1390,7 @@ function renderViews(){
   }));
   const isos = Object.keys(lc).sort((a,b) => lc[b].last.localeCompare(lc[a].last));
   document.getElementById('view-lander').innerHTML =
-    `<h1>${isos.filter(i => !lc[i].planned && !isHome(i)).length} länder</h1><div class="clist">` +
+    `<h1>${isos.filter(i => !lc[i].planned && !isHome(i)).length} länder</h1>` + searchMarkup('searchLander') + '<div class="clist">' +
     isos.map(i => `<button class="trip${lc[i].planned ? ' planned' : ''}" data-country="${esc(i)}">
       <span class="flag">${flagOf(i)}</span>
       <span><b>${esc(countryName(i))}${lc[i].planned ? '<span class="tag">Planerad</span>' : ''}${isHome(i) ? '<span class="tag home-badge">Hemma</span>' : ''}</b>
@@ -1180,6 +1398,7 @@ function renderViews(){
     + '</div>' + (isos.length ? '' : '<p class="example">Inga länder ännu.</p>');
 
   renderSettings();
+  fillThumbs();
 }
 document.addEventListener('click', e => {
   if(e.target.id === 'newTrip') openEditor(null);
@@ -1188,7 +1407,17 @@ document.addEventListener('click', e => {
 
 /* ============================ Inställningar ============================ */
 function renderSettings(){
+  const valt = temaNu();
+  const temaKort = ([id, t]) => `<button type="button" class="tcard" data-tema="${id}" aria-pressed="${id === valt}"
+      style="--t-sea:${t.prev.sea};--t-land:${t.prev.land};--t-vis:${t.prev.vis};--t-surf:${t.prev.surf};--t-acc:${t.prev.acc}">
+      <span class="prev"><i class="l1"></i><i class="l2"></i><i class="v1"></i><i class="v2"></i><span class="sh"></span></span>
+      <span><b>${esc(t.name)}</b><small>${esc(t.desc)}</small></span>
+      <span class="tick"><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg></span></button>`;
   document.getElementById('view-settings').innerHTML = `<h1>Inställningar</h1>
+    <h2 class="sec">Utseende</h2>
+    <p class="subtle">Temat gäller bara den här enheten. Väljer du Hedvig här ändras ingenting i de andras appar.</p>
+    <div class="themes">${Object.entries(TEMAN).map(temaKort).join('')}</div>
+
     <h2 class="sec">Hemort</h2>
     <p class="subtle">Landet ritas i egen färg och får en hus-markör på orten.
     Avstånden i statistiken räknas härifrån.</p>
@@ -1255,6 +1484,15 @@ function renderSettings(){
   const dump = document.getElementById('dump');
   if(dump) dump.value = JSON.stringify(DB, null, 1);
 }
+
+document.getElementById('view-settings').addEventListener('click', e => {
+  const t = e.target.closest('[data-tema]');
+  if(!t) return;
+  setTema(t.dataset.tema);
+  document.querySelectorAll('#view-settings [data-tema]').forEach(b =>
+    b.setAttribute('aria-pressed', String(b.dataset.tema === t.dataset.tema)));
+  toast(`Tema: ${TEMAN[temaNu()].name}`);
+});
 
 document.getElementById('view-settings').addEventListener('click', e => {
   const row = e.target.closest('[data-person]');
