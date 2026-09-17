@@ -133,6 +133,8 @@ label.fl{display:block;font-size:13px;font-weight:600;color:var(--ink-2);margin:
 #map.picking .land,#map.picking .pin circle{cursor:crosshair}
 
 /* ---------- Kartans överlägg ---------- */
+body.no-top #top{display:none}
+body.no-top #view-settings{padding-top:calc(12px + env(safe-area-inset-top,0px))}
 #top{position:absolute;left:0;right:0;top:0;z-index:6;display:flex;flex-direction:column;gap:10px;pointer-events:none;
   padding-top:calc(10px + env(safe-area-inset-top,0px));
   padding-left:calc(16px + env(safe-area-inset-left,0px));

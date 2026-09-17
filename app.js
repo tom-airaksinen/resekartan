@@ -14,7 +14,7 @@ const AUTH = {
   hash: '5805d07268265f31365760d2aa2a450e97629e0d6a43c36829b54b3d971026c7'
 };
 const LS_KEY = 'resekartan.data', LS_AUTH = 'resekartan.unlocked';
-const APP_VERSION = 'v15';   // följ sw.js CACHE, så man ser vad som faktiskt körs
+const APP_VERSION = 'v16';   // följ sw.js CACHE, så man ser vad som faktiskt körs
 
 async function derive(pw){
   if(!crypto?.subtle) throw new Error('nocrypto');
@@ -764,7 +764,8 @@ whoMenu.addEventListener('click', e => {
   else if(filter.has(id)) filter.delete(id);
   else filter.add(id);
   sel = null; selCountry = null;
-  renderWho(); drawPins(); renderSheet(); renderViews(); resetZoom();
+  renderWho(); drawPins(); renderSheet(); renderViews();
+  if(tab === 'karta') resetZoom();      // rör inte kartan när man står i en annan flik
 });
 document.addEventListener('click', () => { if(!whoMenu.hidden) closeWho(); });
 addEventListener('keydown', e => { if(e.key === 'Escape' && !whoMenu.hidden) closeWho(); });
@@ -1189,16 +1190,18 @@ document.addEventListener('click', e => {
 function renderSettings(){
   document.getElementById('view-settings').innerHTML = `<h1>Inställningar</h1>
     <h2 class="sec">Hemort</h2>
-    <p class="subtle">Landet ritas i egen färg och får en hus-markör på orten.</p>
-    <div class="field"><label class="fl" for="setHomeName">Ort</label>
-      <input type="text" id="setHomeName" value="${esc(DB.home?.place?.name || '')}"></div>
-    <div class="row2 field">
-      <div><label class="fl" for="setHomeLat">Latitud</label><input type="number" step="0.0001" id="setHomeLat" value="${DB.home?.place?.lat ?? ''}"></div>
-      <div><label class="fl" for="setHomeLon">Longitud</label><input type="number" step="0.0001" id="setHomeLon" value="${DB.home?.place?.lon ?? ''}"></div>
+    <p class="subtle">Landet ritas i egen färg och får en hus-markör på orten.
+    Avstånden i statistiken räknas härifrån.</p>
+    <div class="field"><label class="fl" for="setHomeName">Sök orten</label>
+      <div class="searchwrap">
+        <input type="text" id="setHomeName" autocomplete="off" placeholder="t.ex. Årsta"
+               value="${esc(DB.home?.place?.name || '')}">
+        <div class="results" id="homeResults" hidden></div>
+      </div>
+      <p class="hint" id="homeNow">${DB.home?.place
+        ? `Nu: ${esc(DB.home.place.name)}, ${esc(countryName(DB.home.iso))} · ${DB.home.place.lat.toFixed(3)}, ${DB.home.place.lon.toFixed(3)}`
+        : 'Ingen hemort vald än.'}</p>
     </div>
-    <div class="field"><label class="fl" for="setHomeIso">Hemland</label>
-      <select id="setHomeIso">${ALL_COUNTRIES.map(c => `<option value="${c.iso}"${c.iso === DB.home?.iso ? ' selected' : ''}>${esc(c.name)}</option>`).join('')}</select></div>
-    <button class="btn" id="saveHome">Spara hemort</button>
 
     <h2 class="sec">Resenärer</h2>
     <p class="subtle">Familjen är förkryssad på varje ny resa. Övriga kryssas i när de var med.</p>
@@ -1306,14 +1309,7 @@ document.addEventListener('click', async e => {
     });
     saveDB(); refreshAll(); setTab('settings'); toast('Resenärerna är sparade.');
   }
-  if(id === 'saveHome'){
-    const name = document.getElementById('setHomeName').value.trim();
-    const lat = parseFloat(document.getElementById('setHomeLat').value);
-    const lon = parseFloat(document.getElementById('setHomeLon').value);
-    DB.home = { iso: document.getElementById('setHomeIso').value,
-                place: name && isFinite(lat) && isFinite(lon) ? { name, lat, lon } : null };
-    saveDB(); refreshAll(); setTab('settings'); toast('Hemorten är sparad.');
-  }
+
   if(id === 'copyDump'){
     const ta = document.getElementById('dump');
     ta.select();
@@ -1351,10 +1347,56 @@ document.addEventListener('click', async e => {
   }
 });
 
+/* Hemorten söks fram på samma sätt som platser i en resa */
+let homeTimer = null, homeSeq = 0;
+function searchHome(q){
+  const box = document.getElementById('homeResults');
+  if(!box) return;
+  const term = String(q || '').trim();
+  if(term.length < 2){ box.hidden = true; return; }
+  const seq = ++homeSeq;
+  box.hidden = false;
+  box.innerHTML = '<div class="msg">Söker …</div>';
+  geocode(term, '').then(hits => {
+    if(seq !== homeSeq) return;
+    if(!hits.length){ box.innerHTML = '<div class="msg">Hittade inget med det namnet.</div>'; return; }
+    box.innerHTML = hits.map(h =>
+      `<button type="button" data-home="${h.lat},${h.lon}" data-name="${esc(h.name)}">${esc(h.name)}${
+        h.kind ? ` <span style="color:var(--ink-3);font-size:12px">${esc(h.kind)}</span>` : ''
+      }<small>${esc(h.label)}</small></button>`).join('');
+  }).catch(() => {
+    if(seq !== homeSeq) return;
+    box.innerHTML = '<div class="msg">Sökningen nås inte härifrån just nu.</div>';
+  });
+}
+
+document.getElementById('view-settings').addEventListener('input', e => {
+  if(e.target.id !== 'setHomeName') return;
+  const v = e.target.value;
+  clearTimeout(homeTimer);
+  homeTimer = setTimeout(() => searchHome(v), SEARCH_WAIT);
+});
+
+document.getElementById('view-settings').addEventListener('click', e => {
+  const b = e.target.closest('[data-home]');
+  if(!b) return;
+  const [lat, lon] = b.dataset.home.split(',').map(Number);
+  const name = b.dataset.name;
+  const iso = isoFromCC((b.dataset.cc || '')) || isoByPosition({ lat, lon });
+  if(!iso){ toast('Kunde inte avgöra vilket land orten ligger i.'); return; }
+  DB.home = { iso, place: { name, lat, lon } };
+  saveDB(); refreshAll(); setTab('settings');
+  toast(`Hemorten är nu ${name}.`);
+});
+
 /* ============================ Flikar ============================ */
 const VIEWS = ['resor', 'stat', 'lander', 'settings'];   // 'karta' är kartan under
 function setTab(t){
   tab = t;
+  // Väljaren gäller resor och statistik, inte inställningar – där skulle den bara
+  // se ut som att inställningarna var personliga
+  document.body.classList.toggle('no-top', t === 'settings');
+  if(t === 'settings') closeWho();
   document.querySelectorAll('#tabs [role=tab]').forEach(b => b.setAttribute('aria-selected', String(b.dataset.tab === t)));
   VIEWS.forEach(v => document.getElementById('view-' + v).hidden = (v !== t));
 }

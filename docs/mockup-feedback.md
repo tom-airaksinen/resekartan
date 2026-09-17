@@ -159,6 +159,14 @@ _(fylls på)_
   appen med det som fanns sparat lokalt i stället för att vänta.
 - Inställningar visar läge och version, så en gammal cachad version syns direkt.
 
+## Steg 13 (2026-09-17)
+
+- **Hemorten söks fram** i stället för att skrivas in med latitud och longitud för
+  hand. Samma sökning som platser i en resa; land och koordinater följer med.
+- **Resenärsväljaren döljs i Inställningar** – där såg den ut att antyda att
+  inställningarna gällde en viss person.
+- **Filterbyte rör inte kartan** när man står i en annan flik.
+
 ## Senare – inte version 1
 
 Version 1 ska vara väldigt enkel, men datamodellen ska inte stänga dörren för detta.
