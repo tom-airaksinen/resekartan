@@ -14,7 +14,7 @@ const AUTH = {
   hash: '5805d07268265f31365760d2aa2a450e97629e0d6a43c36829b54b3d971026c7'
 };
 const LS_KEY = 'resekartan.data', LS_AUTH = 'resekartan.unlocked';
-const APP_VERSION = 'v18';   // följ sw.js CACHE, så man ser vad som faktiskt körs
+const APP_VERSION = 'v19';   // följ sw.js CACHE, så man ser vad som faktiskt körs
 
 /* ============================ Tema ============================
    Temat är per enhet och ligger i localStorage, inte i DB – Hedvig ska kunna ha
@@ -474,6 +474,7 @@ async function idbDel(id){
 }
 
 const photoId = () => 'p' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+const byOrd = (a, b) => (a.ord ?? 9e9) - (b.ord ?? 9e9) || (a.addedAt || '').localeCompare(b.addedAt || '');
 
 /* Skala ned och komprimera tills bilden ryms i ett Firestore-dokument */
 async function shrink(file){
@@ -502,28 +503,22 @@ const photos = {
       const { store } = CLOUD.mod;
       const col = store.collection(CLOUD.db, 'resekartan', 'data', 'foton');
       const snap = await store.getDocs(store.query(col, store.where('tripId', '==', tripId)));
-      return snap.docs.map(d => ({ id: d.id, ...d.data() }))
-        .sort((a, b) => (a.addedAt || '').localeCompare(b.addedAt || ''));
+      return snap.docs.map(d => ({ id: d.id, ...d.data() })).sort(byOrd);
     }
-    return (await idbAll(tripId)).sort((a, b) => (a.addedAt || '').localeCompare(b.addedAt || ''));
+    return (await idbAll(tripId)).sort(byOrd);
   },
-  /* Första bilden i en resa, utan att läsa in hela galleriet. Både markören och
-     Firestores standardordning går på id, och photoId() börjar med tidsstämpeln,
-     så den första posten är den äldsta bilden. */
-  async first(tripId){
+  /* Skriver om ordningen efter ett drag. Bilder utan ord är äldre poster och
+     sorteras sist tills de fått en plats. */
+  async setOrder(list){
     if(CLOUD.on){
       const { store } = CLOUD.mod;
-      const col = store.collection(CLOUD.db, 'resekartan', 'data', 'foton');
-      const snap = await store.getDocs(store.query(col, store.where('tripId', '==', tripId), store.limit(1)));
-      const d = snap.docs[0];
-      return d ? { id: d.id, ...d.data() } : null;
+      const batch = store.writeBatch(CLOUD.db);
+      list.forEach((p, i) => batch.update(store.doc(CLOUD.db, 'resekartan', 'data', 'foton', p.id), { ord: i }));
+      await batch.commit();
+    } else {
+      for(let i = 0; i < list.length; i++) await idbPut({ ...list[i], ord: i });
     }
-    const db = await idb();
-    return new Promise((res, rej) => {
-      const q = db.transaction('foton').objectStore('foton').index('tripId').openCursor(IDBKeyRange.only(tripId));
-      q.onsuccess = () => res(q.result?.value || null);
-      q.onerror = () => rej(q.error);
-    });
+    list.forEach((p, i) => { p.ord = i; });
   },
   async add(tripId, file){
     const { url, w, h } = await shrink(file);
@@ -882,12 +877,12 @@ function defaultFrac(){
 }
 
 /* ---- Miniatyrer i reselistorna ----
-   En resa med minst en bild visar bilden i stället för flaggan. Bilderna är upp
-   till 1400 px breda och skulle äta minne i en lång lista, så varje rad får en
-   egen 128 px-kopia. Kopiorna ligger i minnet tills sidan laddas om. */
-const THUMB_SIDE = 128;
-const thumbs = new Map();        // resa-id → dataURL, eller null för "har ingen bild"
-const thumbBusy = new Set();
+   Resans första bild sparas som en 144 px-kopia på resan själv (`thumb`), inte
+   som en uppslagning per rad. Skälet är att listorna annars måste läsa en hel
+   bild per resa vid varje start – i molnläge en nedladdning på några hundra kB
+   styck – och att raderna nu ritas direkt, utan att vänta på lagringen.
+   `thumbOf` är id:t kopian gjordes av, så den vet när omslaget bytts ut. */
+const THUMB_SIDE = 144;
 
 function makeThumb(url){
   return new Promise(res => {
@@ -899,46 +894,59 @@ function makeThumb(url){
       const cv = document.createElement('canvas');
       cv.width = cv.height = THUMB_SIDE;
       cv.getContext('2d').drawImage(img, (THUMB_SIDE - w) / 2, (THUMB_SIDE - h) / 2, w, h);
-      res(cv.toDataURL('image/jpeg', .72));
+      res(cv.toDataURL('image/jpeg', .62));
     };
     img.onerror = () => res(null);
     img.src = url;
   });
 }
-/* Byter flaggan mot bilden i raderna som redan står på skärmen, så listan inte
-   behöver ritas om när bilden kommer fram. */
-function paintThumb(id, url){
-  document.querySelectorAll(`.trip[data-trip="${CSS.escape(id)}"]`).forEach(row => {
+
+/* Uppdaterar raderna som redan står på skärmen. Den öppna resedetaljen ritas
+   inte om – då skulle galleriet och läsläget hoppa mitt i att man håller på. */
+function paintThumbRows(t){
+  document.querySelectorAll(`.trip[data-trip="${CSS.escape(t.id)}"]`).forEach(row => {
     const img = row.querySelector('.thumb img');
-    if(img){ img.src = url; return; }
-    const flag = row.querySelector('.flag');
-    if(!flag) return;
-    const emoji = flag.textContent;
-    flag.outerHTML = `<span class="thumb"><img src="${url}" alt=""></span>`;
-    row.querySelector('b')?.insertAdjacentHTML('afterbegin', `<span class="rowflag">${emoji}</span>`);
-    row.classList.add('has-thumb');
+    if(t.thumb){
+      if(img){ img.src = t.thumb; return; }
+      const flag = row.querySelector('.flag');
+      if(!flag) return;
+      const emoji = flag.textContent;
+      flag.outerHTML = `<span class="thumb"><img src="${t.thumb}" alt=""></span>`;
+      row.querySelector('b')?.insertAdjacentHTML('afterbegin', `<span class="rowflag">${emoji}</span>`);
+      row.classList.add('has-thumb');
+    } else if(img){
+      const emoji = row.querySelector('.rowflag')?.textContent || '🏳️';
+      row.querySelector('.rowflag')?.remove();
+      row.querySelector('.thumb').outerHTML = `<span class="flag">${emoji}</span>`;
+      row.classList.remove('has-thumb');
+    }
   });
 }
-function fillThumbs(){
-  new Set([...document.querySelectorAll('.trip[data-trip]')].map(b => b.dataset.trip)).forEach(async id => {
-    if(thumbs.has(id) || thumbBusy.has(id)) return;
-    thumbBusy.add(id);
-    try {
-      const rec = await photos.first(id);
-      const url = rec?.url ? await makeThumb(rec.url) : null;
-      thumbs.set(id, url);
-      if(url) paintThumb(id, url);
-    } catch(e){
-      thumbs.set(id, null);      // lagringen tiger – visa flaggan och låt det vara
-    } finally { thumbBusy.delete(id); }
-  });
+
+/* Kallas varje gång en resas bilder ändras: efter uppladdning, borttagning,
+   omordning och när ett gammalt galleri öppnas första gången. */
+async function syncThumb(tripId, list){
+  const t = DB.trips.find(x => x.id === tripId);
+  if(!t) return;
+  const hero = list[0];
+  if(!hero){
+    if(!t.thumb && !t.thumbOf) return;
+    delete t.thumb; delete t.thumbOf;
+  } else {
+    if(t.thumbOf === hero.id && t.thumb) return;
+    const url = await makeThumb(hero.url);
+    if(!url) return;
+    t.thumb = url; t.thumbOf = hero.id;
+  }
+  saveDB();
+  paintThumbRows(t);
 }
 
 const tripRow = t => {
   const first = t.stops[0];
   const extra = t.stops.slice(1).map(s => countryName(s.iso)).join(', ');
   const flag = first ? flagOf(first.iso) : '🏳️';
-  const th = thumbs.get(t.id);
+  const th = t.thumb;
   return `<button class="trip${t.planned ? ' planned' : ''}${th ? ' has-thumb' : ''}" data-trip="${esc(t.id)}">
     ${th ? `<span class="thumb"><img src="${th}" alt=""></span>` : `<span class="flag">${flag}</span>`}
     <span><b>${th ? `<span class="rowflag">${flag}</span>` : ''}${esc(t.title)}${t.planned ? '<span class="tag">Planerad</span>' : ''}${extra ? `<span class="tag side">+ ${esc(extra)}</span>` : ''}</b><small>${span(t.start, t.end)}</small></span>
@@ -970,7 +978,6 @@ function renderSheet(){
     `<h2 class="sec">Senaste resor</h2>` +
     (past.length ? past.map(tripRow).join('') : '<p class="example">Inga resor ännu med det här filtret.</p>') +
     seedNote();
-  fillThumbs();
 }
 
 const ICON = {
@@ -1020,12 +1027,88 @@ function renderPhotos(){
   if(!box) return;
   const cnt = document.getElementById('phCnt');
   if(cnt) cnt.textContent = phCache.length ? `${phCache.length} ${phCache.length === 1 ? 'bild' : 'bilder'}` : '';
-  box.innerHTML = `<div class="grid-ph">${addTile}${phCache.map((p, i) =>
-    `<figure><img src="${p.url}" alt="Bild ${i + 1} från resan" loading="lazy" data-open="${i}">
+  box.innerHTML = `<div class="grid-ph" id="phGrid">${phCache.map((p, i) =>
+    `<figure data-id="${esc(p.id)}"${i === 0 ? ' class="hero"' : ''}>
+      <img src="${p.url}" alt="Bild ${i + 1} från resan" loading="lazy" data-open="${i}" draggable="false">
+      <span class="cover">Omslag</span>
       <button type="button" class="rm" data-rm="${esc(p.id)}" aria-label="Ta bort bilden">
-        <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></figure>`).join('')}</div>
-    ${phCache.length ? '' : '<p class="hint">Lägg till några favoriter från resan. Bilderna krymps innan de sparas, så de tar liten plats.</p>'}`;
+        <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></figure>`).join('')}${addTile}</div>
+    ${phCache.length
+      ? (phCache.length > 1 ? '<p class="hint">Håll på en bild och dra för att flytta den. Den första bilden är omslaget och visas i reselistorna.</p>' : '')
+      : '<p class="hint">Lägg till några favoriter från resan. Bilderna krymps innan de sparas, så de tar liten plats.</p>'}`;
 }
+
+/* ---- Dra för att ändra ordning ----
+   HTML5:s drag and drop finns inte på touch, så ordningen ändras med
+   pointer-händelser: på telefonen startar ett långtryck draget, med mus räcker
+   det att dra några pixlar. Rör sig fingret innan långtrycket hunnit gå är det
+   en skrollning och draget avbryts. */
+const phDrag = { fig: null, on: false, armed: false, timer: null, pid: null, x0: 0, y0: 0, bx: 0, by: 0, endedAt: 0 };
+const phFigures = () => [...document.querySelectorAll('#phGrid figure')];
+
+function phDragStart(x, y){
+  const fig = phDrag.fig;
+  if(!fig) return;
+  clearTimeout(phDrag.timer);
+  phDrag.on = true; phDrag.armed = false; phDrag.bx = x; phDrag.by = y;
+  fig.classList.add('drag');
+  fig.style.transform = 'scale(1.06)';
+  try { fig.setPointerCapture(phDrag.pid); } catch(e){}
+  navigator.vibrate?.(8);
+}
+function phDragMove(x, y){
+  const fig = phDrag.fig;
+  fig.style.transform = `translate(${x - phDrag.bx}px, ${y - phDrag.by}px) scale(1.06)`;
+  // Rutan under fingret: göm den dragna så elementFromPoint ser förbi den
+  fig.style.pointerEvents = 'none';
+  const over = document.elementFromPoint(x, y)?.closest('#phGrid figure');
+  fig.style.pointerEvents = '';
+  if(!over || over === fig) return;
+  const figs = phFigures();
+  if(figs.indexOf(over) > figs.indexOf(fig)) over.after(fig); else over.before(fig);
+  // Rutan har landat i sin nya plats – räkna om nollpunkten så den fortsätter
+  // följa fingret därifrån i stället för att hoppa
+  phDrag.bx = x; phDrag.by = y;
+  fig.style.transform = 'scale(1.06)';
+  phFigures().forEach((f, i) => f.classList.toggle('hero', i === 0));
+}
+function phDragReset(){
+  if(phDrag.fig){ phDrag.fig.classList.remove('drag'); phDrag.fig.style.transform = ''; phDrag.fig.style.pointerEvents = ''; }
+  clearTimeout(phDrag.timer);
+  phDrag.fig = null; phDrag.on = false; phDrag.armed = false; phDrag.timer = null;
+}
+async function phDragEnd(){
+  const ids = phFigures().map(f => f.dataset.id);
+  phDragReset();
+  phDrag.endedAt = Date.now();
+  const byId = new Map(phCache.map(p => [p.id, p]));
+  const next = ids.map(id => byId.get(id)).filter(Boolean);
+  if(next.length !== phCache.length || next.every((p, i) => p.id === phCache[i].id)) return;
+  phCache = next;
+  renderPhotos();
+  try { await photos.setOrder(phCache); }
+  catch(e){ toast('Kunde inte spara ordningen.'); }
+  await syncThumb(phTrip, phCache);
+}
+document.addEventListener('pointerdown', e => {
+  const fig = e.target.closest?.('#phGrid figure');
+  if(!fig || e.button > 0 || e.target.closest('.rm')) return;
+  phDragReset();
+  phDrag.fig = fig; phDrag.pid = e.pointerId; phDrag.x0 = e.clientX; phDrag.y0 = e.clientY;
+  if(e.pointerType === 'mouse') phDrag.armed = true;
+  else phDrag.timer = setTimeout(() => phDragStart(e.clientX, e.clientY), 260);
+});
+document.addEventListener('pointermove', e => {
+  if(!phDrag.fig) return;
+  if(phDrag.on){ phDragMove(e.clientX, e.clientY); return; }
+  const far = Math.hypot(e.clientX - phDrag.x0, e.clientY - phDrag.y0);
+  if(phDrag.armed){ if(far > 5) phDragStart(e.clientX, e.clientY); }
+  else if(far > 8) phDragReset();          // fingret skrollar, inte drar
+});
+document.addEventListener('pointerup', () => { if(phDrag.on) phDragEnd(); else phDragReset(); });
+document.addEventListener('pointercancel', phDragReset);
+// Pointer-händelser stoppar inte skrollningen på touch – det gör bara den här
+document.addEventListener('touchmove', e => { if(phDrag.on) e.preventDefault(); }, { passive: false });
 
 async function loadPhotos(tripId){
   phTrip = tripId; phCache = [];
@@ -1039,6 +1122,7 @@ async function loadPhotos(tripId){
     if(phTrip !== tripId) return;                 // användaren hann byta resa
     phCache = list;
     renderPhotos();
+    syncThumb(tripId, list);      // fyller i omslaget för gallerier som lades in före v19
   } catch(e){
     const box = document.getElementById('phBody');
     if(box) box.innerHTML = `<p class="ph-empty">${
@@ -1055,7 +1139,7 @@ const phInput = document.getElementById('phInput');
 document.addEventListener('click', e => {
   if(e.target.closest('#phAdd')){ phInput.value = ''; phInput.click(); return; }
   const open = e.target.closest('[data-open]');
-  if(open){ openViewer(+open.dataset.open); return; }
+  if(open){ if(Date.now() - phDrag.endedAt > 300) openViewer(+open.dataset.open); return; }
   const rm = e.target.closest('[data-rm]');
   if(rm){ removePhoto(rm.dataset.rm); return; }
 });
@@ -1081,7 +1165,7 @@ phInput.addEventListener('change', async () => {
     done++;
   }
   if(phTrip === tripAtStart) renderPhotos();
-  thumbs.delete(tripAtStart); fillThumbs();
+  await syncThumb(tripAtStart, phCache);
   toast(failed
     ? `${done - failed} av ${files.length} bilder tillagda, ${failed} misslyckades.`
     : done === 1 ? '1 bild tillagd.' : `${done} bilder tillagda.`);
@@ -1092,8 +1176,8 @@ async function removePhoto(id){
   try {
     await photos.remove(id);
     phCache = phCache.filter(p => p.id !== id);
-    thumbs.delete(phTrip); fillThumbs();
     renderPhotos();
+    await syncThumb(phTrip, phCache);
     if(!viewerEl.hidden) closeViewer();
     toast('Bilden är borttagen.');
   } catch(e){ toast('Kunde inte ta bort bilden.'); }
@@ -1186,7 +1270,6 @@ async function removeTrip(id){
   if(!t) return;
   if(!await ask(`Ta bort resan "${t.title}"? Det går inte att ångra.`, 'Ta bort')) return;
   DB.trips = DB.trips.filter(x => x.id !== id);
-  thumbs.delete(id);
   saveDB(); sel = null;
   if(!editor.hidden) closeEditor();
   refreshAll();
@@ -1398,7 +1481,6 @@ function renderViews(){
     + '</div>' + (isos.length ? '' : '<p class="example">Inga länder ännu.</p>');
 
   renderSettings();
-  fillThumbs();
 }
 document.addEventListener('click', e => {
   if(e.target.id === 'newTrip') openEditor(null);

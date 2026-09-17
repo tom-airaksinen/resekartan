@@ -27,4 +27,5 @@
 - [ ] Ska fler teman byggas (Skymning, Stugan från prototypen)?
 - [ ] Ny hemskärmsikon – vilken av de fyra? Genomskinlig bakgrund går inte på iOS (fylls svart), så ikonen behöver en designad bakgrund.
 - [ ] Fotobaserad design (thumbnails i listor, hero-bild i resedetaljen)? Inspo och konsekvenser i `docs/inspo/fotobaserad.md`. Kräver drag and drop för bildordning. (2026-09-17)
-- [ ] Miniatyrer i reselistorna: första bilden visas till vänster i Senaste resor och Alla resor när resan har minst en bild. Byggt 2026-09-17 som test. Rader utan bild behåller flaggan i en smalare ruta, så vänsterkanten blir ojämn i blandade listor – behåll, eller ge alla rader samma bredd? (2026-09-17)
+- [ ] Miniatyrer i reselistorna: resans omslagsbild visas till vänster i Senaste resor och Alla resor. Byggt 2026-09-17 som test, med drag and drop i galleriet för att välja omslag. Rader utan bild behåller flaggan i en smalare ruta, så vänsterkanten blir ojämn i blandade listor – behåll, eller ge alla rader samma bredd? (2026-09-17)
+- [ ] Omslagsbilden sparas på resan i `DB` (~5 kB styck). Håll ett öga på dokumentstorleken när resorna blir många – Firestores gräns är 1 MB. (2026-09-17)

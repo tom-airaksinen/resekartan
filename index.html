@@ -295,8 +295,13 @@ h2.sec:first-child{margin-top:8px}
 .photos h3{font-size:15px;color:var(--ink-2);font-weight:600;margin:0 0 8px;display:flex;align-items:center;justify-content:space-between;gap:10px}
 .photos h3 .cnt{font-weight:400;color:var(--ink-3);font-size:13px}
 .grid-ph{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:6px}
-.grid-ph figure{margin:0;position:relative;aspect-ratio:1;border-radius:10px;overflow:hidden;background:var(--surface-2)}
-.grid-ph img{width:100%;height:100%;object-fit:cover;display:block;cursor:zoom-in}
+.grid-ph figure{margin:0;position:relative;aspect-ratio:1;border-radius:10px;overflow:hidden;background:var(--surface-2);
+  touch-action:pan-y;user-select:none;-webkit-user-select:none}
+.grid-ph figure.drag{z-index:5;box-shadow:0 10px 26px rgba(0,0,0,.3);cursor:grabbing}
+.grid-ph img{width:100%;height:100%;object-fit:cover;display:block;cursor:zoom-in;-webkit-user-drag:none}
+.grid-ph .cover{display:none;position:absolute;left:5px;bottom:5px;padding:2px 8px;border-radius:999px;
+  background:rgba(27,39,51,.62);color:#fff;font-size:10.5px;font-weight:600;backdrop-filter:blur(4px)}
+.grid-ph figure.hero .cover{display:block}
 .grid-ph .rm{position:absolute;top:4px;right:4px;width:26px;height:26px;border-radius:50%;
   background:rgba(27,39,51,.62);color:#fff;display:grid;place-items:center;backdrop-filter:blur(4px)}
 .grid-ph .rm svg{width:13px;height:13px;stroke:currentColor;fill:none;stroke-width:2.4;stroke-linecap:round}

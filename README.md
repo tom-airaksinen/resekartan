@@ -67,13 +67,37 @@ bara ljust – därför är den mörka media-frågan i `index.html` undantagen m
 `:not([data-theme="rosa"])`. Missar man det undantaget när ett tema läggs till
 ritas det mörka temats färger ovanpå det nya i en telefon som står i mörkt läge.
 
-### Miniatyrer i reselistorna
+### Omslagsbilder och miniatyrer
 
-En resa med minst en bild visar den första bilden i stället för flaggan i
-Senaste resor och Alla resor. `photos.first()` läser **en** post per resa (markör
-i IndexedDB, `limit(1)` i Firestore) – hela galleriet vore hundratals kB per resa.
-Bilden skalas ned till 128 px i `makeThumb()` innan den läggs i DOM:en; en
-1400 px-JPEG per rad skulle äta tiotals megabyte i en lång lista.
+En resa med minst en bild visar sitt omslag i stället för flaggan i Senaste resor
+och Alla resor. Omslaget är resans **första** bild, och ordningen ändras genom att
+dra rutorna i galleriet.
+
+Miniatyren ligger på resan själv i `DB` (`thumb`, en 144 px-JPEG, plus `thumbOf`
+som är id:t den gjordes av) – inte bland bilderna. Det är med flit:
+
+- Listorna ritas direkt, utan att vänta på lagringen, och uppdateras i samma
+  ögonblick som omslaget byts.
+- Alternativet vore en uppslagning per resa vid varje start. I molnläge blir det
+  en nedladdning på några hundra kB per resa, varje gång appen öppnas.
+- Priset är några kB per resa i huvuddokumentet. Med `thumb` runt 5 kB rymmer
+  Firestores gräns på 1 MB långt över hundra resor, men det är den gränsen att
+  hålla ögonen på om biblioteket växer.
+
+`syncThumb()` håller den aktuell: efter uppladdning, borttagning, omordning och
+när ett galleri från före v19 öppnas första gången.
+
+### Dra för att ändra ordning
+
+HTML5:s drag and drop finns inte på touch, så galleriet använder pointer-händelser
+(`phDrag` i `app.js`). På telefonen startar ett långtryck på 260 ms draget; med mus
+räcker det att dra fem pixlar. Rör sig fingret mer än åtta pixlar innan långtrycket
+gått är det en skrollning, och draget avbryts.
+
+Två fällor: `touch-action` på rutorna är `pan-y` så sidan fortfarande går att
+skrolla, och skrollningen under ett pågående drag stoppas av en egen
+`touchmove`-lyssnare med `passive: false` – `preventDefault` på pointer-händelser
+gör ingenting åt saken.
 
 ### Två CSS-fällor värda att minnas
 
