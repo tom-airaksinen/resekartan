@@ -14,7 +14,7 @@ const AUTH = {
   hash: '5805d07268265f31365760d2aa2a450e97629e0d6a43c36829b54b3d971026c7'
 };
 const LS_KEY = 'resekartan.data', LS_AUTH = 'resekartan.unlocked';
-const APP_VERSION = 'v21';   // följ sw.js CACHE, så man ser vad som faktiskt körs
+const APP_VERSION = 'v22';   // följ sw.js CACHE, så man ser vad som faktiskt körs
 
 /* ============================ Tema ============================
    Temat är per enhet och ligger i localStorage, inte i DB – Hedvig ska kunna ha
@@ -541,6 +541,15 @@ const photos = {
     }
     return (await idbAll(tripId)).sort(byOrd);
   },
+  /* Molnets egen diskcache. Finns bilderna där svarar den utan nät. Lokalt
+     läge läser redan från disken, så där finns inget att skynda på. */
+  async listCached(tripId){
+    if(!CLOUD.on) return null;
+    const { store } = CLOUD.mod;
+    const col = store.collection(CLOUD.db, 'resekartan', 'data', 'foton');
+    const snap = await store.getDocsFromCache(store.query(col, store.where('tripId', '==', tripId)));
+    return snap.docs.map(d => ({ id: d.id, ...d.data() })).sort(byOrd);
+  },
   /* Skriver om ordningen efter ett drag. Bilder utan ord är äldre poster och
      sorteras sist tills de fått en plats. */
   async setOrder(list){
@@ -611,17 +620,21 @@ const photos = {
 
 /* Bilder som lades in före v21 har originalet kvar i sin post. De får en
    förhandsbild i bakgrunden, en i taget, utan att någon behöver vänta. */
+const migrating = new Set();
 async function migratePhotos(tripId, list){
-  const gamla = list.filter(p => p.url && !p.prev);
+  const gamla = list.filter(p => p.url && !p.prev && !migrating.has(p.id));
   if(!gamla.length) return;
-  for(const p of gamla){
-    try {
+  gamla.forEach(p => migrating.add(p.id));
+  try {
+    for(const p of gamla){
       p.prev = await scaleUrl(p.url, PREV_SIDE, PREV_Q);
       if(!p.prev){ delete p.prev; continue; }
       await photos.split(p);
-    } catch(e){ return; }        // nätet eller lagringen strular – nästa gång
-  }
-  if(phTrip === tripId) renderPhotos();
+    }
+    if(phTrip === tripId) renderPhotos();
+  } catch(e){
+    // nätet eller lagringen strular – resten tas nästa gång resan öppnas
+  } finally { gamla.forEach(p => migrating.delete(p.id)); }
 }
 
 /* ============================ Kartan ============================ */
@@ -1106,6 +1119,12 @@ const addTile = `<button type="button" class="addph" id="phAdd">
 function renderPhotos(){
   const box = document.getElementById('phBody');
   if(!box) return;
+  /* Ritas rutnätet om mitt i ett drag blir rutan man håller i en lös nod som
+     inte längre sitter i sidan, och nästa flytt klistrar in den igen bredvid
+     sin egen ersättare – då syns samma bild två gånger. Vänta tills draget
+     släppts i stället. */
+  if(phDrag.on){ phDrag.pending = true; return; }
+  phDrag.pending = false;
   const cnt = document.getElementById('phCnt');
   if(cnt) cnt.textContent = phCache.length ? `${phCache.length} ${phCache.length === 1 ? 'bild' : 'bilder'}` : '';
   box.innerHTML = `<div class="grid-ph" id="phGrid">${phCache.map((p, i) =>
@@ -1124,7 +1143,7 @@ function renderPhotos(){
    pointer-händelser: på telefonen startar ett långtryck draget, med mus räcker
    det att dra några pixlar. Rör sig fingret innan långtrycket hunnit gå är det
    en skrollning och draget avbryts. */
-const phDrag = { fig: null, on: false, armed: false, timer: null, pid: null, x0: 0, y0: 0, bx: 0, by: 0, endedAt: 0 };
+const phDrag = { fig: null, on: false, armed: false, pending: false, timer: null, pid: null, x0: 0, y0: 0, bx: 0, by: 0, endedAt: 0 };
 const phFigures = () => [...document.querySelectorAll('#phGrid figure')];
 
 function phDragStart(x, y){
@@ -1139,6 +1158,8 @@ function phDragStart(x, y){
 }
 function phDragMove(x, y){
   const fig = phDrag.fig;
+  // Rutnätet kan ha ritats om under fingret – då finns rutan inte kvar
+  if(!fig.isConnected || !fig.closest('#phGrid')){ phDragReset(); return; }
   fig.style.transform = `translate(${x - phDrag.bx}px, ${y - phDrag.by}px) scale(1.06)`;
   // Rutan under fingret: göm den dragna så elementFromPoint ser förbi den
   fig.style.pointerEvents = 'none';
@@ -1156,7 +1177,9 @@ function phDragMove(x, y){
 function phDragReset(){
   if(phDrag.fig){ phDrag.fig.classList.remove('drag'); phDrag.fig.style.transform = ''; phDrag.fig.style.pointerEvents = ''; }
   clearTimeout(phDrag.timer);
+  const väntade = phDrag.on && phDrag.pending;
   phDrag.fig = null; phDrag.on = false; phDrag.armed = false; phDrag.timer = null;
+  if(väntade) renderPhotos();        // omritningen som sköts upp under draget
 }
 async function phDragEnd(){
   const ids = phFigures().map(f => f.dataset.id);
@@ -1164,7 +1187,10 @@ async function phDragEnd(){
   phDrag.endedAt = Date.now();
   const byId = new Map(phCache.map(p => [p.id, p]));
   const next = ids.map(id => byId.get(id)).filter(Boolean);
-  if(next.length !== phCache.length || next.every((p, i) => p.id === phCache[i].id)) return;
+  // Stämmer inte rutorna med bilderna vi har är sidan ur synk. Rita om från
+  // bilderna i stället för att spara en ordning som kan vara fel.
+  if(next.length !== ids.length || next.length !== phCache.length){ renderPhotos(); return; }
+  if(next.every((p, i) => p.id === phCache[i].id)){ if(phDrag.pending) renderPhotos(); return; }
   phCache = next;
   renderPhotos();
   try { await photos.setOrder(phCache); }
@@ -1197,33 +1223,54 @@ document.addEventListener('touchmove', e => { if(phDrag.on) e.preventDefault(); 
 
 async function loadPhotos(tripId){
   phTrip = tripId; phCache = [];
-  try {
-    // Lagringen kan tiga still (blockerad IndexedDB i privat läge, nätet borta).
-    // Då ska vyn visa något användbart i stället för att stå kvar på "Hämtar …".
-    const list = await Promise.race([
-      photos.list(tripId),
-      new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 9000))
-    ]);
+  const visa = list => {
     if(phTrip !== tripId) return;                 // användaren hann byta resa
     phCache = list;
     renderPhotos();
     syncThumb(tripId, list);      // fyller i omslaget för gallerier som lades in före v19
     migratePhotos(tripId, list);  // och delar upp bilder som lades in före v21
+  };
+  /* Molnets diskcache först. Den svarar direkt och funkar på dåligt nät, så
+     galleriet står inte och snurrar medan servern funderar. Servern får sedan
+     komma ikapp i bakgrunden. */
+  let ur_cache = false;
+  try {
+    const c = await photos.listCached(tripId);
+    if(c?.length){ ur_cache = true; visa(c); }
+  } catch(e){}
+  try {
+    // Lagringen kan tiga still (blockerad IndexedDB i privat läge, nätet borta).
+    // Då ska vyn visa något användbart i stället för att stå kvar på "Hämtar …".
+    const list = await Promise.race([
+      photos.list(tripId),
+      new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 20000))
+    ]);
+    visa(list);
   } catch(e){
+    if(ur_cache) return;                          // vi visar redan bilderna
     const box = document.getElementById('phBody');
-    if(box) box.innerHTML = `<p class="ph-empty">${
+    if(phTrip !== tripId || !box) return;
+    box.innerHTML = `<p class="ph-empty">${
       e.code === 'permission-denied'
         ? 'Firestore-reglerna släpper inte in bilderna än. Uppdatera reglerna enligt docs/firebase.md.'
         : e.message === 'timeout'
-          ? 'Bildlagringen svarar inte. Prova att ladda om.'
+          ? 'Bildlagringen svarar inte just nu.'
           : 'Kunde inte hämta bilderna.'
-    }</p><div class="grid-ph" style="margin-top:8px">${addTile}</div>`;
+    }</p>
+    <div class="actions" style="margin-top:10px"><button class="btn" id="phRetry">Försök igen</button></div>
+    <div class="grid-ph" style="margin-top:12px">${addTile}</div>`;
   }
 }
 
 const phInput = document.getElementById('phInput');
 document.addEventListener('click', e => {
   if(e.target.closest('#phAdd')){ phInput.value = ''; phInput.click(); return; }
+  if(e.target.closest('#phRetry')){
+    const box = document.getElementById('phBody');
+    if(box) box.innerHTML = '<p class="ph-busy"><span class="spin"></span>Hämtar bilder …</p>';
+    loadPhotos(phTrip);
+    return;
+  }
   const open = e.target.closest('[data-open]');
   if(open){ if(Date.now() - phDrag.endedAt > 300) openViewer(+open.dataset.open); return; }
   const rm = e.target.closest('[data-rm]');

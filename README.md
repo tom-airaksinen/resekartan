@@ -102,6 +102,11 @@ dokument, och en stor IndexedDB-post kostar minne även lokalt:
 | `foton` | uppgifter om bilden + `prev` (400 px) |
 | `bilder` | `url`, originalet (1400 px) |
 
+Galleriet läser **molnets diskcache först** och låter servern komma ikapp i
+bakgrunden, så en trög uppkoppling inte lämnar rutnätet snurrande. Går det ändå
+fel visas ett meddelande med en **Försök igen**-knapp i stället för en
+återvändsgränd.
+
 Bilder som lades in före v21 har originalet kvar i `foton`. De flyttas
 automatiskt, en i taget i bakgrunden, när resan öppnas. Originalet skrivs alltid
 före posten som pekar på det, så ett avbrutet nät aldrig lämnar en bildruta utan
@@ -122,6 +127,10 @@ Tre fällor:
   saken.
 - **`-webkit-touch-callout: none` måste sitta på bildrutorna.** Utan den öppnar
   iOS sin egen Dela/Spara-meny på långtryck, och draget kommer aldrig igång.
+- **`renderPhotos()` ritar inte om mitt i ett drag.** Rutan man håller i blir då
+  en lös nod, och nästa flytt klistrar in den igen bredvid sin egen ersättare –
+  samma bild syns två gånger fast räknaren säger rätt antal. Omritningen skjuts
+  upp till draget släppts (`phDrag.pending`).
 
 ### Två CSS-fällor värda att minnas
 
