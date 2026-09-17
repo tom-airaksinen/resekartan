@@ -88,11 +88,13 @@ button:focus-visible,[tabindex]:focus-visible,input:focus-visible,select:focus-v
 #lock{position:fixed;inset:0;z-index:50;display:grid;place-items:center;background:var(--ocean);padding:24px}
 #lock .box{width:100%;max-width:340px;background:var(--surface);border-radius:18px;padding:28px 22px;box-shadow:0 12px 40px rgba(27,39,51,.16);text-align:center}
 #lock h1{font-size:24px;margin-bottom:4px}
-#lock p{color:var(--ink-2);font-size:14px;margin:0 0 18px}
-#lock .globe{font-size:40px;line-height:1;margin-bottom:10px}
-#lock form{display:flex;flex-direction:column;gap:10px}
-#lock .err{color:var(--danger);font-size:13px;min-height:18px;margin:0}
-#lock .status{color:var(--ink-2);font-size:13px;margin:0;display:flex;align-items:center;justify-content:center;gap:8px}
+#lock p{color:var(--ink-2);font-size:14px;margin:0 0 14px}
+#lock .logo{display:block;width:72px;height:72px;margin:0 auto 14px;border-radius:22.4%;overflow:hidden;
+  box-shadow:0 3px 10px rgba(27,39,51,.18)}
+#lock .logo svg{display:block;width:100%;height:100%}
+#lock form{display:flex;flex-direction:column;gap:10px;margin-top:4px}
+#lock .err{color:var(--danger);font-size:13px;min-height:18px;margin:6px 0 0}
+#lock .status{color:var(--ink-2);font-size:13px;margin:10px 0 0;display:flex;align-items:center;justify-content:center;gap:8px}
 #lock .status[hidden]{display:none}
 .spin{width:14px;height:14px;border-radius:50%;border:2px solid var(--line);border-top-color:var(--accent);animation:sp .8s linear infinite;flex:none}
 @keyframes sp{to{transform:rotate(360deg)}}
@@ -546,16 +548,27 @@ h2.sec:first-child{margin-top:8px}
 
 <div id="lock">
   <div class="box">
-    <div class="globe">🗺️</div>
+    <span class="logo" aria-hidden="true"><svg viewBox="0 0 100 100">
+      <defs><linearGradient id="lockSky" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#D6E5EE"/><stop offset="1" stop-color="#B4CDDD"/></linearGradient></defs>
+      <rect width="100" height="100" fill="url(#lockSky)"/>
+      <g transform="translate(50 50) scale(.86) translate(-50 -52)">
+        <path d="M50 92C50 92 20 62 20 42a30 30 0 0 1 60 0c0 20-30 50-30 50z" fill="#2B4F84"/>
+        <circle cx="50" cy="42" r="19" fill="#FBFAF6"/>
+        <ellipse cx="50" cy="42" rx="8.5" ry="19" fill="none" stroke="#2B4F84" stroke-width="2.4"/>
+        <path d="M31 42h38M34.5 32h31M34.5 52h31" stroke="#2B4F84" stroke-width="2.4" stroke-linecap="round" fill="none"/>
+        <circle cx="50" cy="42" r="19" fill="none" stroke="#2B4F84" stroke-width="2.6"/>
+        <circle cx="57" cy="36" r="5.2" fill="#E4572E" stroke="#FBFAF6" stroke-width="2"/>
+      </g></svg></span>
     <h1>Resekartan</h1>
-    <p id="lockLead">Familjens resor. Skriv lösenordet för att komma in.</p>
-    <form id="lockForm">
+    <p id="lockLead">Familjens resor.</p>
+    <form id="lockForm" hidden>
       <input type="email" id="email" placeholder="E-post" autocomplete="username" aria-label="E-post" hidden>
       <input type="password" id="pw" placeholder="Lösenord" autocomplete="current-password" aria-label="Lösenord">
       <button class="btn primary" type="submit" id="pwBtn">Lås upp</button>
-      <p class="status" id="pwStatus" hidden><span class="spin"></span><span id="pwStatusText"></span></p>
-      <p class="err" id="pwErr" role="alert"></p>
     </form>
+    <p class="status" id="pwStatus" hidden><span class="spin"></span><span id="pwStatusText"></span></p>
+    <p class="err" id="pwErr" role="alert"></p>
   </div>
 </div>
 

@@ -146,6 +146,24 @@ fyller allt utanför motivet med svart. Bakgrunden är därför en egen ljus him
 > Byter man ikonen behåller iOS den gamla på hemskärmen. Ta bort genvägen och
 > lägg till appen på nytt för att se den nya.
 
+Samma motiv ligger inlagt som SVG i låsskärmen i `index.html`. Det är med flit en
+kopia och inte `icon.svg`: en bild till hade blivit ännu en begäran innan sidan
+kan visa något. Ändrar man ikonen behöver båda ställena uppdateras.
+
+### Låsskärmen är också startbilden
+
+Formuläret ligger dolt i markupen och visas först när någon faktiskt behöver logga
+in. Tidigare blinkade ett lösenordsfält förbi vid varje start medan Firebase
+laddades, fast man redan var inloggad.
+
+`resekartan.inloggad` i `localStorage` minns att enheten varit inne. Är den satt
+väntar appen tyst med bara loggan; är den inte det visas formuläret direkt, för då
+finns inget att vänta på. Tre saker tar fram formuläret: att inloggningen svarar
+att ingen är inloggad, att något går fel, eller att åtta sekunder gått utan besked.
+
+Kortet står kvar när formuläret dyker upp, så startbilden växer till en
+inloggningsruta i stället för att bytas ut.
+
 ### Två CSS-fällor värda att minnas
 
 **CSS vinner över presentationsattribut.** Kartans linjebredder räknas fram per

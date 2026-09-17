@@ -11,7 +11,7 @@
       i en gammal version. Nu går sidan och de små kodfilerna nätverket först och
       faller tillbaka på cachen; bara det tunga (kartdata, ikoner, bibliotek)
       läses cache-först. */
-const CACHE = 'resekartan-v23';
+const CACHE = 'resekartan-v24';
 
 const SHELL = [
   './', './index.html', './app.js', './manifest.json',

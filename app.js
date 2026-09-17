@@ -13,8 +13,8 @@ const AUTH = {
   // Skriv aldrig själva lösenordet i koden – repot är publikt.
   hash: '5805d07268265f31365760d2aa2a450e97629e0d6a43c36829b54b3d971026c7'
 };
-const LS_KEY = 'resekartan.data', LS_AUTH = 'resekartan.unlocked';
-const APP_VERSION = 'v23';   // följ sw.js CACHE, så man ser vad som faktiskt körs
+const LS_KEY = 'resekartan.data', LS_AUTH = 'resekartan.unlocked', LS_SEEN = 'resekartan.inloggad';
+const APP_VERSION = 'v24';   // följ sw.js CACHE, så man ser vad som faktiskt körs
 
 /* ============================ Tema ============================
    Temat är per enhet och ligger i localStorage, inte i DB – Hedvig ska kunna ha
@@ -53,6 +53,21 @@ async function derive(pw){
   return [...new Uint8Array(bits)].map(b => b.toString(16).padStart(2,'0')).join('');
 }
 const lockEl = document.getElementById('lock'), appEl = document.getElementById('app');
+/* Låsskärmen är också startbilden. Formuläret ligger dolt tills vi vet att någon
+   faktiskt behöver logga in – annars blinkade ett lösenordsfält förbi vid varje
+   start medan Firebase laddades, fast man redan var inloggad sedan tidigare. */
+let lockFormShown = false;
+function showLockForm(lead){
+  if(lockFormShown) return;
+  lockFormShown = true;
+  document.getElementById('lockForm').hidden = false;
+  if(lead) document.getElementById('lockLead').textContent = lead;
+  // Bara med mus: på telefonen skulle tangentbordet hoppa upp vid varje start
+  if(matchMedia('(hover: hover)').matches) document.getElementById('pw').focus();
+}
+const sett = () => { try { return localStorage.getItem(LS_SEEN) === '1'; } catch(e){ return false; } };
+const setSett = v => { try { v ? localStorage.setItem(LS_SEEN, '1') : localStorage.removeItem(LS_SEEN); } catch(e){} };
+
 function lockStatus(text){
   const box = document.getElementById('pwStatus');
   if(!box) return;
@@ -225,7 +240,7 @@ document.getElementById('lockForm').addEventListener('submit', async e => {
       const { auth } = CLOUD.mod;
       lockStatus('Loggar in …');
       const cred = await auth.signInWithEmailAndPassword(CLOUD.auth, email, pw);
-      CLOUD.user = cred.user; CLOUD.on = true;
+      CLOUD.user = cred.user; CLOUD.on = true; setSett(true);
       lockStatus('Hämtar familjens resor …');
       await cloudFirstSync();
       openApp();
@@ -1817,6 +1832,7 @@ document.addEventListener('click', async e => {
   if(id === 'logout'){
     if(CLOUD.on){ try { await CLOUD.mod.auth.signOut(CLOUD.auth); } catch(err){} }
     try { localStorage.removeItem(LS_AUTH); } catch(err){}
+    setSett(false);
     location.reload();
   }
 });
@@ -2757,14 +2773,19 @@ function registerSW(){
   if(!useCloud()){
     let unlocked = false;
     try { unlocked = localStorage.getItem(LS_AUTH) === AUTH.hash; } catch(e){}
-    if(unlocked) openApp(); else document.getElementById('pw').focus();
+    if(unlocked) openApp();
+    else showLockForm('Familjens resor. Skriv lösenordet för att komma in.');
     return;
   }
 
   // Molnläge: Firebase Authentication ersätter lösenordshashen
   document.getElementById('email').hidden = false;
   document.getElementById('pwBtn').textContent = 'Logga in';
-  document.getElementById('lockLead').textContent = 'Familjens resor. Logga in för att komma in.';
+  const LEAD = 'Familjens resor. Logga in för att komma in.';
+  // Har den här enheten aldrig varit inloggad finns inget att vänta på
+  if(!sett()) showLockForm(LEAD);
+  // Svarar inloggningen inte alls ska man ändå kunna göra något
+  const nödutgång = setTimeout(() => { if(appEl.hidden) showLockForm(LEAD); }, 8000);
   cloudDot('', 'Kopplar upp …');
   lockStatus('Kopplar upp mot molnet …');
   try {
@@ -2772,10 +2793,15 @@ function registerSW(){
     lockStatus('');
     CLOUD.mod.auth.onAuthStateChanged(CLOUD.auth, async user => {
       if(!user){
+        clearTimeout(nödutgång);
+        setSett(false);
         cloudDot('', 'Inte inloggad');
         lockStatus('');
+        showLockForm(LEAD);
         return;
       }
+      clearTimeout(nödutgång);
+      setSett(true);
       CLOUD.user = user; CLOUD.on = true;
       lockStatus('Hämtar familjens resor …');
       try { await cloudFirstSync(); }
@@ -2794,6 +2820,7 @@ function registerSW(){
           e.code === 'permission-denied'
             ? 'Kontot har inte behörighet till datat. Kontrollera Firestore-reglerna.'
             : 'Kunde inte hämta datat: ' + (e.code || e.message);
+        showLockForm(LEAD);
         return;
       }
       if(appEl.hidden) openApp(); else { refreshAll(); lockStatus(''); }
@@ -2801,7 +2828,10 @@ function registerSW(){
       cloudDot('on', 'Inloggad som ' + user.email);
     });
   } catch(e){
+    clearTimeout(nödutgång);
+    lockStatus('');
     document.getElementById('pwErr').textContent = 'Kunde inte ladda Firebase. Kontrollera nätet.';
     cloudDot('off', 'Firebase kunde inte laddas');
+    showLockForm(LEAD);
   }
 })();
