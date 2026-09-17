@@ -132,6 +132,20 @@ Tre fällor:
   samma bild syns två gånger fast räknaren säger rätt antal. Omritningen skjuts
   upp till draget släppts (`phDrag.pending`).
 
+### Appikonen
+
+Ikonen är en kartnål med en glob i huvudet, ritad i `icon.svg`. De fyra PNG-erna
+i repot renderas ur den filen och ska inte redigeras för hand.
+
+`icon-maskable.svg` är samma motiv nedkrympt till 72 %. Android beskär maskerbara
+ikoner till en cirkel, och allt utanför den inre 80-procentiga ytan kan försvinna.
+
+Genomskinlighet är medvetet bortvald: iOS tillåter den inte i hemskärmsikoner utan
+fyller allt utanför motivet med svart. Bakgrunden är därför en egen ljus himmel.
+
+> Byter man ikonen behåller iOS den gamla på hemskärmen. Ta bort genvägen och
+> lägg till appen på nytt för att se den nya.
+
 ### Två CSS-fällor värda att minnas
 
 **CSS vinner över presentationsattribut.** Kartans linjebredder räknas fram per
