@@ -168,6 +168,27 @@ färgskala inte får göra.
 Teckenförklaringen ankras ovanför bottenarket via `--sheet-h`, som `setSheet()`
 skriver. Innan dess låg den bakom arket och syntes aldrig på en telefon.
 
+### Alla resor är inte samma sak som hela familjen
+
+Resenärsväljaren har två lägen överst som är lätta att blanda ihop. **Alla resor**
+filtrerar inte alls. **Hela familjen** kryssar i alla fyra, och eftersom flera
+valda personer betyder *och* – inte *eller* – visas då bara resor där alla var med.
+
+Det stod tidigare bara "Alla" under rubriken "Visa resor där dessa var med", vilket
+lovade det ena och gjorde det andra: en resa där bara en av oss var med syntes ändå.
+
+### Länk till resan
+
+Varje resa kan ha en adress, typiskt ett fotoalbum men lika gärna en blogg. Den
+sparas i `t.link` och visas som en rad i resedetaljen, med ett namn som härleds ur
+värdnamnet (`linkName()` känner igen Google Photos, iCloud och några till, annars
+visas domänen).
+
+`cleanUrl()` släpper bara igenom http och https, och lägger till https när
+protokollet saknas. Fältet renderas som en `href`, så inget annat protokoll får ta
+sig in. Vill man ha flera länkar per resa längre fram är `t.link` det som behöver
+bli en lista.
+
 ### Toppraden på kartan
 
 `#top` har `align-items:flex-start`, och det är inte kosmetik. Utan den sträcker

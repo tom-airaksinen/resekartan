@@ -205,7 +205,7 @@ body.no-top #view-settings{padding-top:calc(12px + env(safe-area-inset-top,0px))
 .zoom{position:absolute;right:calc(16px + env(safe-area-inset-right,0px));top:calc(56px + env(safe-area-inset-top,0px));display:none;flex-direction:column;background:var(--surface);border-radius:8px;box-shadow:0 2px 10px rgba(0,0,0,.08);overflow:hidden}
 .zoom button{width:34px;height:34px;font-size:18px;line-height:1}
 .zoom button+button{border-top:1px solid var(--line)}
-.legend{position:absolute;left:calc(16px + env(safe-area-inset-left,0px));bottom:calc(var(--sheet-h, 0px) + 12px);transition:bottom .28s cubic-bezier(.2,.8,.2,1);display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--ink-2);background:var(--surface);padding:8px 10px;border-radius:8px;box-shadow:0 2px 10px rgba(0,0,0,.08)}
+.legend{position:absolute;left:calc(16px + env(safe-area-inset-left,0px));bottom:calc(var(--sheet-h, 0px) + 12px);transition:bottom .28s cubic-bezier(.2,.8,.2,1),opacity .2s;display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--ink-2);background:var(--surface);padding:8px 10px;border-radius:8px;box-shadow:0 2px 10px rgba(0,0,0,.08)}
 .legend i{display:inline-block;width:12px;height:12px;border-radius:3px;vertical-align:-2px;margin-right:6px}
 .legend .l-h{background:var(--home);border:1px solid var(--home-line)} .legend .l-p{background:repeating-linear-gradient(135deg,var(--planned) 0 2px,var(--land) 2px 4px)} .legend .l-s{background:var(--pin-side);border-radius:50%}
 .legend .l-ramp{display:flex;align-items:center}
@@ -253,6 +253,7 @@ body.no-top #view-settings{padding-top:calc(12px + env(safe-area-inset-top,0px))
   transition:height .28s cubic-bezier(.2,.8,.2,1);touch-action:none}
 #sheet.dragging{transition:none}
 #stage.dragging .legend{transition:none}
+#stage.sheet-high .legend{opacity:0;pointer-events:none}
 .handle{flex:none;display:flex;align-items:center;justify-content:center;height:34px;width:100%;
   touch-action:none;cursor:grab}
 .handle:active{cursor:grabbing}
@@ -307,6 +308,13 @@ h2.sec:first-child{margin-top:8px}
 .meta .who-row span{display:inline-flex;align-items:center;gap:5px;font-size:14px}
 .meta .who-row .av{width:22px;height:22px;font-size:10px}
 .note{margin:0 0 14px;max-width:60ch;color:var(--ink)}
+.triplink{display:grid;grid-template-columns:22px 1fr 16px;gap:10px;align-items:center;margin:0 0 14px;
+  padding:11px 12px;border-radius:12px;background:var(--surface-2);color:var(--ink);text-decoration:none}
+.triplink b{display:block;font-weight:600;font-size:15px}
+.triplink small{display:block;color:var(--ink-2);font-size:12.5px}
+.triplink svg{width:100%;height:100%;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.triplink .ic{display:block;width:22px;height:22px;color:var(--ink-2)}
+.triplink .ch{display:block;width:16px;height:16px;color:var(--ink-3)}
 .stops{display:flex;flex-direction:column;gap:8px}
 .stop{display:grid;grid-template-columns:auto 1fr;gap:2px 10px;padding:10px 12px;border-radius:12px;background:var(--surface-2)}
 .stop.side{background:transparent;border:1px dashed var(--line);margin-left:22px;position:relative}

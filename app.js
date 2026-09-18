@@ -14,7 +14,7 @@ const AUTH = {
   hash: '5805d07268265f31365760d2aa2a450e97629e0d6a43c36829b54b3d971026c7'
 };
 const LS_KEY = 'resekartan.data', LS_AUTH = 'resekartan.unlocked', LS_SEEN = 'resekartan.inloggad';
-const APP_VERSION = 'v28';   // följ sw.js CACHE, så man ser vad som faktiskt körs
+const APP_VERSION = 'v29';   // följ sw.js CACHE, så man ser vad som faktiskt körs
 
 /* ============================ Tema ============================
    Temat är per enhet och ligger i localStorage, inte i DB – Hedvig ska kunna ha
@@ -382,6 +382,35 @@ function span(a, b){
     return `${A.getDate()} ${MON[A.getMonth()]} – ${B.getDate()} ${MON[B.getMonth()]} ${A.getFullYear()}`;
   return `${A.getDate()} ${MON[A.getMonth()]} ${A.getFullYear()} – ${B.getDate()} ${MON[B.getMonth()]} ${B.getFullYear()}`;
 }
+/* ---- Länk till resan ----
+   En adress till något som hör till resan: ett fotoalbum, en blogg, en dagbok.
+   Bara http och https släpps igenom – fältet renderas som en länk, och då får
+   inget annat protokoll ta sig in. Saknas protokoll antas https. */
+function cleanUrl(v){
+  const raw = String(v ?? '').trim();
+  if(!raw) return '';
+  try {
+    const u = new URL(/^https?:\/\//i.test(raw) ? raw : 'https://' + raw);
+    return (u.protocol === 'http:' || u.protocol === 'https:') && u.hostname.includes('.') ? u.href : '';
+  } catch(e){ return ''; }
+}
+const LINK_NAMES = [
+  [/^(photos\.google\.com|photos\.app\.goo\.gl|goo\.gl)$/, 'Google Photos'],
+  [/^(share\.icloud\.com|www\.icloud\.com|icloud\.com)$/, 'iCloud-album'],
+  [/(^|\.)instagram\.com$/, 'Instagram'],
+  [/(^|\.)flickr\.com$/, 'Flickr'],
+  [/(^|\.)dropbox\.com$/, 'Dropbox'],
+  [/(^|\.)(onedrive\.live\.com|1drv\.ms)$/, 'OneDrive'],
+  [/(^|\.)youtube\.com$|^youtu\.be$/, 'YouTube'],
+];
+function linkName(url){
+  try {
+    const h = new URL(url).hostname.replace(/^www\./, '');
+    for(const [re, namn] of LINK_NAMES) if(re.test(h)) return namn;
+    return h;
+  } catch(e){ return 'Länk'; }
+}
+
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const av = id => `<span class="av${isCore(id) ? '' : ' guest'}" style="--pc:${personColor(id)}" title="${esc(personName(id))}"><i>${esc(personName(id)[0] || '?')}</i></span>`;
 // Bara familjen får varsin bricka; gäster samlas i en "+N" med namnen i title,
@@ -943,8 +972,13 @@ d3.select('#zout').on('click', () => ease(svg).call(zoom.scaleBy, 1/1.6));
 const whoBtn = document.getElementById('whoBtn');
 const whoMenu = document.getElementById('whoMenu');
 
+const helaFamiljen = () => {
+  const f = family();
+  return f.length > 0 && f.length === filter.size && f.every(p => filter.has(p.id));
+};
 function filterLabel(){
-  if(!filter.size) return 'Alla';
+  if(!filter.size) return 'Alla resor';
+  if(helaFamiljen()) return 'Hela familjen';
   const names = [...filter].map(personName);
   return names.length <= 2 ? names.join(' och ') : `${names.length} valda`;
 }
@@ -952,9 +986,14 @@ const TICK = '<span class="tick"><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 
 
 function renderWho(){
   document.getElementById('whoLabel').textContent = filterLabel();
+  /* "Alla resor" och "Hela familjen" är inte samma sak, och det var precis det
+     som förvirrade: en resa där bara en av oss var med hör hemma i den första
+     men inte i den andra. Väljer man personer gäller och, inte eller – resan
+     ska visas bara om alla de valda var med. */
   whoMenu.innerHTML =
-    `<p class="lead">Visa resor där dessa var med</p>
-     <button data-p="" aria-pressed="${!filter.size}">Alla${TICK}</button><hr>` +
+    `<button data-p="" aria-pressed="${!filter.size}">Alla resor${TICK}</button>
+     <button data-p="*" aria-pressed="${helaFamiljen()}">Hela familjen${TICK}</button><hr>
+     <p class="lead">Eller välj vilka som var med</p>` +
     family().map(p => `<button data-p="${esc(p.id)}" aria-pressed="${filter.has(p.id)}">
       ${av(p.id)}${esc(p.name)}${TICK}</button>`).join('');
 }
@@ -971,6 +1010,7 @@ whoMenu.addEventListener('click', e => {
   e.stopPropagation();
   const id = b.dataset.p;
   if(!id) filter.clear();
+  else if(id === '*'){ filter.clear(); family().forEach(p => filter.add(p.id)); }
   else if(filter.has(id)) filter.delete(id);
   else filter.add(id);
   sel = null; selCountry = null;
@@ -1002,6 +1042,9 @@ function setSheet(frac, animate = true){
   sheet.style.height = (sheetFrac * 100) + '%';
   // Teckenförklaringen låg annars bakom arket och syntes aldrig på telefonen
   stage.style.setProperty('--sheet-h', (sheetFrac * 100) + '%');
+  // Dras arket högt finns ingen karta kvar att förklara, och rutan skulle
+  // annars tränga sig in bakom toppraden
+  stage.classList.toggle('sheet-high', sheetFrac > .66);
 }
 const snapTo = frac => SNAPS.reduce((a, b) => Math.abs(b - frac) < Math.abs(a - frac) ? b : a);
 
@@ -1162,7 +1205,9 @@ function renderSheet(){
 const ICON = {
   cal:'<svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>',
   pin:'<svg viewBox="0 0 24 24"><path d="M12 21s-7-6.2-7-11a7 7 0 0114 0c0 4.8-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/></svg>',
-  who:'<svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0113 0M16 5a3.5 3.5 0 010 7M21.5 20a6.5 6.5 0 00-4-6"/></svg>'
+  who:'<svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0113 0M16 5a3.5 3.5 0 010 7M21.5 20a6.5 6.5 0 00-4-6"/></svg>',
+  link:'<svg viewBox="0 0 24 24"><path d="M10 13a4.5 4.5 0 006.4.2l2.6-2.6a4.5 4.5 0 00-6.4-6.4l-1.5 1.5M14 11a4.5 4.5 0 00-6.4-.2L5 13.4a4.5 4.5 0 006.4 6.4l1.5-1.5"/></svg>',
+  out:'<svg viewBox="0 0 24 24"><path d="M9 5h10v10M19 5L9.5 14.5M15 14v5H5V9h5"/></svg>'
 };
 
 function renderTrip(t){
@@ -1181,6 +1226,10 @@ function renderTrip(t){
       ${ICON.who}<div class="who-row">${(t.who||[]).map(p => `<span>${av(p)}${esc(personName(p))}</span>`).join('')}</div>
     </div>
     ${t.note ? `<p class="note">${esc(t.note)}</p>` : ''}
+    ${t.link ? `<a class="triplink" href="${esc(t.link)}" target="_blank" rel="noopener noreferrer">
+      <span class="ic">${ICON.link}</span>
+      <span><b>${esc(linkName(t.link))}</b><small>Öppnas i en ny flik</small></span>
+      <span class="ch">${ICON.out}</span></a>` : ''}
     <div class="stops">${t.stops.map(stopRow).join('')}</div>
     <div class="actions">
       <button class="btn" data-edit="${esc(t.id)}">Ändra resa</button>
@@ -1986,7 +2035,7 @@ const blankStop = (iso, side = false) => ({ iso, side, places: [blankPlace()] })
 function blankTrip(iso){
   const today = new Date().toISOString().slice(0,10);
   return { id: 't' + Date.now().toString(36), title: countryName(iso), start: today, end: today,
-           who: family().map(p => p.id), planned: false, note: '', stops: [blankStop(iso)] };
+           who: family().map(p => p.id), planned: false, note: '', link: '', stops: [blankStop(iso)] };
 }
 // Länder vi redan varit i – snabbval högst upp i landsökningen
 function recentCountries(n){
@@ -2067,6 +2116,10 @@ function renderEditor(){
     <div class="field"><label class="fl">Vilka var med?</label>${whoPicker(draft.who, 'trip')}</div>
     <div class="field"><label class="fl" for="fNote">Minne från resan</label>
       <textarea id="fNote" placeholder="Vad gjorde vi? Vad var bäst?">${esc(draft.note)}</textarea></div>
+    <div class="field"><label class="fl" for="fLink">Länk till resan</label>
+      <input type="url" id="fLink" inputmode="url" autocomplete="off" spellcheck="false"
+             value="${esc(draft.link || '')}" placeholder="photos.google.com/…">
+      <p class="hint">Valfritt. Ett fotoalbum, en blogg eller något annat som hör till resan.</p></div>
 
     <h2 class="sec">Länder på resan</h2>
     <p class="hint" style="margin-bottom:10px">Första landet är huvudmålet. Lägg till en avstickare för ett land ni bara tog en sväng till – det räknas ändå som besökt land.</p>
@@ -2131,6 +2184,8 @@ function readDraft(){
   draft.title = g('fTitle')?.value.trim() ?? draft.title;
   draft.planned = !!g('fPlanned')?.checked;
   draft.note = g('fNote')?.value.trim() ?? draft.note;
+  const rå = g('fLink')?.value;
+  if(rå !== undefined){ draft.linkRå = rå.trim(); draft.link = cleanUrl(rå); }
   draft.stops.forEach((s, i) => {
     const side = edBody.querySelector(`[data-side="${i}"]`);
     if(side) s.side = side.checked;
@@ -2399,6 +2454,9 @@ document.getElementById('edSave').onclick = () => {
   if(!draft.start || !draft.end) return showFormError('Välj datum för resan.', '#fDates');
   if(draft.end < draft.start) return showFormError('Slutdatumet ligger före startdatumet.', '#fDates');
   if(!(draft.who || []).length) return showFormError('Kryssa i minst en som var med.');
+  if(draft.linkRå && !draft.link)
+    return showFormError('Länken ser inte ut som en webbadress. Klistra in hela adressen, till exempel photos.google.com/…', '#fLink');
+  delete draft.linkRå;
 
   // En plats utan position kan inte ritas på kartan – peka ut vilken det gäller
   const missing = [];

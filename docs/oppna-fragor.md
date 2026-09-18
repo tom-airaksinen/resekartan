@@ -30,3 +30,4 @@
 - [ ] Miniatyrer i reselistorna: resans omslagsbild visas till vänster i Senaste resor och Alla resor. Byggt 2026-09-17 som test, med drag and drop i galleriet för att välja omslag. Rader utan bild fick först en smalare ruta och ojämn vänsterkant; sedan 2026-09-18 har alla reserader samma liggande ruta, med flaggan i när bild saknas. (2026-09-18)
 - [ ] Omslagsbilden sparas på resan i `DB` (~5 kB styck). Håll ett öga på dokumentstorleken när resorna blir många – Firestores gräns är 1 MB. (2026-09-17)
 - [ ] Färgskalan på kartan: tre steg i blått, relativa mot mest besökta landet i den aktuella filtreringen sedan 2026-09-18. Känns enkelresorna för ljusa mot havet, eller ska skalan byta kulör helt? Tonerna ligger som `--v1`/`--v2`/`--v3` per tema i `index.html`. (2026-09-18)
+- [ ] Länk per resa finns sedan 2026-09-18 (en adress, t.ex. Google Photos-album). Ska det gå att lägga flera länkar per resa, och i så fall med egna namn? (2026-09-18)
