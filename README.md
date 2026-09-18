@@ -173,26 +173,37 @@ Galleriet tar emot bilder ur urklipp, inte bara ur filväljaren. Det är till f�
 bilder som finns i ett delat album men inte på telefonen: kopiera där, klistra in
 här, i stället för att spara ner till kamerarullen först.
 
-**Huvudvägen på iPhone är `navigator.clipboard.read()`, och den måste köras
-på pekskärm.** Ett tryck på rutan får Safari att visa sin Paste-bubbla; ett tryck
-på den, och bilden kommer. Det var så det fungerade i v43. I v47 stängdes
-anropet av på pekskärm utifrån en felaktig teori om att Safari aldrig lämnar ut
-bilder den vägen, och därmed försvann den enda väg som någonsin fungerat på
-telefonen. Läxan: **ändra inte det som fungerar utan att först ha diffat mot den
-version som fungerade.**
+**Vad Safari på iPhone faktiskt lämnar ut, mätt med logg 2026-09-18:**
 
-`read()` lämnar dock inte ut alla urklipp. Vad den svarar i klartext skrivs under
-rutnätet när den inte ger någon bild (`läsning gav …`), så nästa gång det händer
-finns ett svar i stället för en gissning.
+| Urklippets innehåll | `clipboard.read()` svarar |
+| --- | --- |
+| skärmdump, bild kopierad från en webbsida | en post med `image/png` – fungerar |
+| bild kopierad ur Google Photos-appen | en post **utan typer**; `getType()` ger `NotAllowedError` för alla typer |
 
-**Rutan är `contenteditable`**, inte en knapp, för att långtryck ska ge systemets
-Klistra in-meny som andra väg. Bilden kan då komma in på tre sätt, och Safari
-väljer inte samma som andra:
+Det andra fallet är inte "finns inte" utan "får inte": appen lägger bilden på
+urklippet i en form som WebKit inte släpper till webbsidor, och det går inte att
+komma runt från sidan. Det förklarar varför inklistringen "fungerade ibland" under
+utvecklingen – det berodde på vilken sorts bild som låg i urklippet, inte på
+koden. Läxan från den veckan: **logga på skärmen innan du gissar.** Fyra
+omskrivningar byggde på teorier som en enda loggrad hade fällt.
+
+**Rutan har därför två lägen.** Som knapp frågar ett tryck urklippet, vilket
+räcker för skärmdumpar: inget tangentbord, ingen extra bubbla. Säger Safari nej
+blir rutan ett skrivfält (`contenteditable`) och får fokus, så iOS egen Klistra
+in-meny finns på långtryck som andra chans, och en rad under rutnätet säger rakt
+ut vad som hände och att Lägg till från Bilder alltid fungerar. Tangentbordet
+kommer bara i det läget. Efter en lyckad inklistring blir rutan knapp igen.
+
+Loggen (`phLog`, styrs av `PH_LOG_ON`) visas bara när något gått fel.
+
+I skrivfältsläget kan bilden komma in på flera sätt, och Safari väljer inte samma
+som andra:
 
 | Väg | Var |
 | --- | --- |
 | `clipboard.read()` | huvudvägen på iPhone och där Safari tillåter det |
-| `clipboardData.files` | datorn, Android |
+| `clipboardData.files` eller `items` | datorn, Android |
+| `beforeinput` med `insertFromPaste` | iOS lämnar ibland datat där i stället för i `paste` |
 | `text/html` med en `<img src>` | Safari lämnar ibland bara ut en adress |
 | en `<img>` som webbläsaren själv lägger i rutan | Safari, bilder från andra appar |
 

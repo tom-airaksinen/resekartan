@@ -32,3 +32,4 @@
 - [ ] Färgskalan på kartan: tre steg i blått, relativa mot mest besökta landet i den aktuella filtreringen sedan 2026-09-18. Känns enkelresorna för ljusa mot havet, eller ska skalan byta kulör helt? Tonerna ligger som `--v1`/`--v2`/`--v3` per tema i `index.html`. (2026-09-18)
 - [ ] Länk per resa finns sedan 2026-09-18 (en adress, t.ex. Google Photos-album). Ska det gå att lägga flera länkar per resa, och i så fall med egna namn? (2026-09-18)
 - [ ] Gästkonto som bara får läsa? Utrett 2026-09-18, inte byggt. Reglerna är fem rader; jobbet ligger i appen, särskilt tre skrivningar som sker av att bara titta. Se `docs/gastkonto.md`. (2026-09-18)
+- [ ] Klistra in bild: skärmdumpar fungerar på iPhone, bilder ur Google Photos-appen släpper Safari inte ifrån sig (`NotAllowedError`). Kvar att bekräfta: fångar långtryck i skrivfältsläget dem ändå? Annars är Spara till Bilder → Lägg till vägen, och rutan kan tas bort på telefonen. (2026-09-18)

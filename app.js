@@ -14,7 +14,7 @@ const AUTH = {
   hash: '5805d07268265f31365760d2aa2a450e97629e0d6a43c36829b54b3d971026c7'
 };
 const LS_KEY = 'resekartan.data', LS_AUTH = 'resekartan.unlocked', LS_SEEN = 'resekartan.inloggad', LS_LEGEND = 'resekartan.legend';
-const APP_VERSION = 'v51';   // följ sw.js CACHE, så man ser vad som faktiskt körs
+const APP_VERSION = 'v52';   // följ sw.js CACHE, så man ser vad som faktiskt körs
 
 /* ============================ Tema ============================
    Temat är per enhet och ligger i localStorage, inte i DB – Hedvig ska kunna ha
@@ -1303,13 +1303,26 @@ const ZWSP = '\u200B';
 const pasteLabel = `<span class="klistraetikett" aria-hidden="true">
   <svg viewBox="0 0 24 24"><path d="M9 4H7a2 2 0 00-2 2v13a2 2 0 002 2h10a2 2 0 002-2V6a2 2 0 00-2-2h-2"/><rect x="9" y="2.5" width="6" height="3.5" rx="1.2"/></svg>
   Klistra in</span>`;
+/* Två lägen. Som knapp: ett tryck frågar urklippet, vilket räcker för
+   skärmdumpar och bilder från webben – inget tangentbord, ingen extra bubbla.
+   Säger Safari nej blir rutan ett skrivfält och får fokus, så iOS egen
+   Klistra in-meny finns på långtryck som andra chans. Tangentbordet kommer
+   bara i det läget. */
 const pasteTile = `<div class="klistrawrap">
-  <div class="klistra" id="phPaste" contenteditable="true" role="textbox"
+  <div class="klistra" id="phPaste" role="button" tabindex="0"
        aria-label="Klistra in en bild">${ZWSP}</div>${pasteLabel}</div>`;
 const aterstallPasteTile = () => {
   const el = document.getElementById('phPaste');
-  if(el) el.textContent = ZWSP;
+  if(!el) return;
+  el.textContent = ZWSP;
+  el.removeAttribute('contenteditable');
+  el.setAttribute('role', 'button');
 };
+function oppnaSkrivfalt(el){
+  el.setAttribute('contenteditable', 'true');
+  el.setAttribute('role', 'textbox');
+  el.focus();
+}
 
 function renderPhotos(){
   const box = document.getElementById('phBody');
@@ -1329,9 +1342,9 @@ function renderPhotos(){
     <p class="hint">${phCache.length > 1
       ? 'Håll på en bild och dra för att flytta den. Den första bilden är omslaget och visas i reselistorna. '
       : phCache.length ? '' : 'Lägg till några favoriter från resan. Bilderna krymps innan de sparas, så de tar liten plats. '}
-      Klistra in: tryck på rutan och sedan på Klistra in när den frågar. Kommer ingen fråga, håll ner i rutan och välj Klistra in i menyn. Går inte det heller: spara bilden till Bilder och använd Lägg till.${
+      Klistra in fungerar för skärmdumpar och bilder från webben. Bilder kopierade ur andra appar släpper Safari inte alltid ifrån sig; spara dem till Bilder och tryck Lägg till.${
         urklippsInfo ? `<br><span class="urklipp" style="color:var(--danger)">${esc(urklippsInfo)}</span>` : ''}</p>${
-        PH_LOG_ON && phLog.length ? `<pre id="phLog" class="phlog">${esc(phLog.join('\n'))}</pre>` : ''}`;
+        PH_LOG_ON && urklippsInfo && phLog.length ? `<pre id="phLog" class="phlog">${esc(phLog.join('\n'))}</pre>` : ''}`;
 }
 
 /* ---- Dra för att ändra ordning ----
@@ -1536,6 +1549,7 @@ function logga(txt){
   if(phLog.length > 14) phLog.shift();
   let el = document.getElementById('phLog');
   if(!el){
+    if(!urklippsInfo) return;                 // loggen visas först när något gått fel
     const hint = document.querySelector('#phBody .hint');
     if(!hint) return;
     hint.insertAdjacentHTML('afterend', '<pre id="phLog" class="phlog"></pre>');
@@ -1562,6 +1576,8 @@ function visaUrklipp(txt){
   h.querySelector('.urklipp')?.remove();
   if(txt) h.insertAdjacentHTML('beforeend',
     `<br><span class="urklipp" style="color:var(--danger)">${esc(txt)}</span>`);
+  if(PH_LOG_ON && txt && phLog.length && !document.getElementById('phLog'))
+    h.insertAdjacentHTML('afterend', `<pre id="phLog" class="phlog">${esc(phLog.join('\n'))}</pre>`);
 }
 // Vad som blev kvar i rutan, utan det osynliga tecknet och utan råmarkup
 const rutansInnehall = el => [...el.childNodes]
@@ -1574,9 +1590,11 @@ const rutansInnehall = el => [...el.childNodes]
    och tog därmed bort den enda väg som någonsin fungerat på iPhone. Långtryck i
    fältet finns kvar som andra väg, men den är inte huvudvägen. */
 async function klistraIn(){
-  logga(`tryck · galleri=${galleriOppet()} · read=${typeof navigator.clipboard?.read}`);
   if(!galleriOppet()) return;
   const el = document.getElementById('phPaste');
+  // Redan i skrivfältsläge: låt iOS sköta trycket, fråga inte urklippet igen
+  if(el?.isContentEditable){ logga('tryck i skrivfältsläge – lämnar till systemet'); return; }
+  logga(`tryck · galleri=${galleriOppet()} · read=${typeof navigator.clipboard?.read}`);
   const filer = [], spar = [];
   try {
     logga('read startar');
@@ -1618,10 +1636,10 @@ async function klistraIn(){
   } catch(e){ spar.push('fel: ' + e.name); logga(`read fel: ${e.name} ${e.message || ''}`); }
   logga(`read gav ${filer.length} bild(er)`);
   if(filer.length){ urklippsInfo = ''; aterstallPasteTile(); return laggTillBilder(filer); }
-  el?.focus();      // låt systemets egen Klistra in-meny ta över
   visaUrklipp(spar.some(x => x === '(utan typer)')
-    ? 'Safari lämnar inte ut den här bilden till appen. Håll ner i rutan och välj Klistra in i menyn.'
-    : 'läsning gav ' + (spar.join(' | ') || 'inget'));
+    ? 'Safari lämnar inte ut just den här bilden till appen. Prova: håll ner i rutan och välj Klistra in. Annars: spara bilden till Bilder och tryck Lägg till.'
+    : 'Urklippet innehöll ingen bild (' + (spar.join(' | ') || 'tomt') + ').');
+  if(el) oppnaSkrivfalt(el);      // andra chansen: iOS egen meny på långtryck
 }
 
 /* Webbläsaren la in bilden i rutan i stället för att skicka den som fil.
