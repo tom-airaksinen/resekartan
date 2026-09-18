@@ -14,7 +14,7 @@ const AUTH = {
   hash: '5805d07268265f31365760d2aa2a450e97629e0d6a43c36829b54b3d971026c7'
 };
 const LS_KEY = 'resekartan.data', LS_AUTH = 'resekartan.unlocked', LS_SEEN = 'resekartan.inloggad', LS_LEGEND = 'resekartan.legend';
-const APP_VERSION = 'v41';   // följ sw.js CACHE, så man ser vad som faktiskt körs
+const APP_VERSION = 'v42';   // följ sw.js CACHE, så man ser vad som faktiskt körs
 
 /* ============================ Tema ============================
    Temat är per enhet och ligger i localStorage, inte i DB – Hedvig ska kunna ha
@@ -1289,6 +1289,12 @@ let phCache = [], phTrip = null;
 const addTile = `<button type="button" class="addph" id="phAdd">
   <svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="15" rx="2.5"/><path d="M3 16l5-5 4 4 3-3 6 6M12 2v6M9 5h6"/></svg>
   Lägg till</button>`;
+/* På datorn räcker cmd-V, men iOS släpper bara fram urklippet efter ett tryck
+   och en egen bekräftelse. Därför en ruta att trycka på också. */
+const kanKlistra = () => !!navigator.clipboard?.read;
+const pasteTile = `<button type="button" class="addph" id="phPaste">
+  <svg viewBox="0 0 24 24"><path d="M9 4H7a2 2 0 00-2 2v13a2 2 0 002 2h10a2 2 0 002-2V6a2 2 0 00-2-2h-2"/><rect x="9" y="2.5" width="6" height="3.5" rx="1.2"/></svg>
+  Klistra in</button>`;
 
 function renderPhotos(){
   const box = document.getElementById('phBody');
@@ -1304,7 +1310,7 @@ function renderPhotos(){
   box.innerHTML = `<div class="grid-ph" id="phGrid">${phCache.map((p, i) =>
     `<figure data-id="${esc(p.id)}"${i === 0 ? ' class="hero"' : ''}>
       <img src="${p.prev || p.url}" alt="Bild ${i + 1} från resan" loading="lazy" data-open="${i}" draggable="false">
-      <span class="cover">Omslag</span></figure>`).join('')}${addTile}</div>
+      <span class="cover">Omslag</span></figure>`).join('')}${addTile}${kanKlistra() ? pasteTile : ''}</div>
     ${phCache.length
       ? (phCache.length > 1 ? '<p class="hint">Håll på en bild och dra för att flytta den. Den första bilden är omslaget och visas i reselistorna.</p>' : '')
       : '<p class="hint">Lägg till några favoriter från resan. Bilderna krymps innan de sparas, så de tar liten plats.</p>'}`;
@@ -1437,6 +1443,7 @@ async function loadPhotos(tripId){
 const phInput = document.getElementById('phInput');
 document.addEventListener('click', e => {
   if(e.target.closest('#phAdd')){ phInput.value = ''; phInput.click(); return; }
+  if(e.target.closest('#phPaste')){ klistraIn(); return; }
   if(e.target.closest('#phRetry')){
     const box = document.getElementById('phBody');
     if(box) box.innerHTML = '<p class="ph-busy"><span class="spin"></span>Hämtar bilder …</p>';
@@ -1447,8 +1454,10 @@ document.addEventListener('click', e => {
   if(open){ if(Date.now() - phDrag.endedAt > 300) openViewer(+open.dataset.open); return; }
 });
 
-phInput.addEventListener('change', async () => {
-  const files = [...phInput.files].filter(f => f.type.startsWith('image/'));
+phInput.addEventListener('change', () => laggTillBilder([...phInput.files]));
+
+async function laggTillBilder(valda){
+  const files = valda.filter(f => f.type.startsWith('image/'));
   if(!files.length || !phTrip) return;
   const box = document.getElementById('phBody');
   const tripAtStart = phTrip;
@@ -1472,6 +1481,40 @@ phInput.addEventListener('change', async () => {
   toast(failed
     ? `${done - failed} av ${files.length} bilder tillagda, ${failed} misslyckades.`
     : done === 1 ? '1 bild tillagd.' : `${done} bilder tillagda.`);
+}
+
+/* ---- Klistra in en bild ----
+   Bra när bilden finns i ett delat album men inte på telefonen: kopiera den där
+   och klistra in här, i stället för att spara ner den till kamerarullen först. */
+const galleriOppet = () => !!phTrip && !!document.getElementById('phBody')
+  && editor.hidden && importer.hidden && viewerEl.hidden;
+
+async function klistraIn(){
+  if(!galleriOppet()) return;
+  let filer = [];
+  try {
+    for(const post of await navigator.clipboard.read()){
+      const typ = post.types.find(t => t.startsWith('image/'));
+      if(!typ) continue;
+      const blob = await post.getType(typ);
+      filer.push(new File([blob], 'urklipp.' + (typ.split('/')[1] || 'png'), { type: typ }));
+    }
+  } catch(e){
+    return toast(e.name === 'NotAllowedError'
+      ? 'Appen fick inte läsa urklipp.'
+      : 'Kunde inte läsa urklipp på den här enheten.');
+  }
+  if(!filer.length) return toast('Ingen bild i urklipp.');
+  laggTillBilder(filer);
+}
+
+document.addEventListener('paste', e => {
+  // Klistrar man in i ett textfält ska texten dit, inte bli en bild
+  if(!galleriOppet() || e.target.closest?.('input, textarea, [contenteditable]')) return;
+  const filer = [...(e.clipboardData?.files || [])].filter(f => f.type.startsWith('image/'));
+  if(!filer.length) return;
+  e.preventDefault();
+  laggTillBilder(filer);
 });
 
 async function removePhoto(id){

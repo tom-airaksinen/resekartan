@@ -155,6 +155,27 @@ byts bilden rakt av utan glid.
 **Att ta bort en bild sker bara i helskärmsläget.** Kryssen i rutnätet togs bort:
 man raderar sällan, och de gjorde att man inte vågade trycka på bilderna.
 
+### Klistra in en bild
+
+Galleriet tar emot bilder ur urklipp, inte bara ur filväljaren. Det är till för
+bilder som finns i ett delat album men inte på telefonen: kopiera där, klistra in
+här, i stället för att spara ner till kamerarullen först.
+
+Två vägar in, för de fungerar olika:
+
+- **`paste`-händelsen** räcker på datorn. Den tar bilden ur `clipboardData.files`.
+  Den ignoreras när markören står i ett textfält, och när ingen resa är öppen.
+- **En egen ruta i rutnätet** som anropar `navigator.clipboard.read()`. iOS släpper
+  bara fram urklippet efter ett tryck och en egen bekräftelse, så där finns ingen
+  genväg. Rutan visas bara om webbläsaren har API:et.
+
+Båda går vidare till `laggTillBilder()`, samma väg som filväljaren, så bilderna
+krymps och får omslag på precis samma sätt.
+
+> Varför inte hämta omslaget automatiskt ur ett Google Photos-album? Webbläsaren
+> får inte läsa den sidan, och allt som kommer runt det kräver en server eller
+> nycklar. Utrett 2026-09-18.
+
 ### Dra för att ändra ordning
 
 HTML5:s drag and drop finns inte på touch, så galleriet använder pointer-händelser
