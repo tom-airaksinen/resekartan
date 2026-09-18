@@ -14,7 +14,7 @@ const AUTH = {
   hash: '5805d07268265f31365760d2aa2a450e97629e0d6a43c36829b54b3d971026c7'
 };
 const LS_KEY = 'resekartan.data', LS_AUTH = 'resekartan.unlocked', LS_SEEN = 'resekartan.inloggad', LS_LEGEND = 'resekartan.legend';
-const APP_VERSION = 'v46';   // följ sw.js CACHE, så man ser vad som faktiskt körs
+const APP_VERSION = 'v47';   // följ sw.js CACHE, så man ser vad som faktiskt körs
 
 /* ============================ Tema ============================
    Temat är per enhet och ligger i localStorage, inte i DB – Hedvig ska kunna ha
@@ -1329,7 +1329,8 @@ function renderPhotos(){
     <p class="hint">${phCache.length > 1
       ? 'Håll på en bild och dra för att flytta den. Den första bilden är omslaget och visas i reselistorna. '
       : phCache.length ? '' : 'Lägg till några favoriter från resan. Bilderna krymps innan de sparas, så de tar liten plats. '}
-      Klistra in: tryck på rutan, håll sedan ner i den och välj Klistra in.</p>`;
+      Klistra in: tryck på rutan, håll sedan ner i den och välj Klistra in.${
+        urklippsInfo ? `<br><span class="urklipp" style="color:var(--danger)">${esc(urklippsInfo)}</span>` : ''}</p>`;
 }
 
 /* ---- Dra för att ändra ordning ----
@@ -1517,12 +1518,38 @@ async function filFranUrl(url, namn = 'urklipp'){
 }
 const imgSrcUrHtml = html => html.match(/<img[^>]+src="([^"]+)"/i)?.[1] || null;
 
+/* Vad urklippet faktiskt innehöll, i klartext under rutnätet. Inklistring beter
+   sig olika i olika webbläsare och går inte att felsöka i blindo. */
+let urklippsInfo = '';
+/* Skriv raden direkt i hjälptexten. Att rita om galleriet här skulle slita bort
+   rutan användaren just står i, mitt under inklistringen. */
+function visaUrklipp(txt){
+  urklippsInfo = txt;
+  const h = document.querySelector('#phBody .hint');
+  if(!h) return;
+  h.querySelector('.urklipp')?.remove();
+  if(txt) h.insertAdjacentHTML('beforeend',
+    `<br><span class="urklipp" style="color:var(--danger)">${esc(txt)}</span>`);
+}
+// Vad som blev kvar i rutan, utan etiketten och utan råmarkup
+const rutansInnehall = el => [...el.childNodes]
+  .filter(n => !(n.nodeType === 1 && n.classList?.contains('etikett')))
+  .map(n => n.nodeType === 1 ? `<${n.nodeName.toLowerCase()}>` : n.textContent.trim())
+  .filter(Boolean).join(' ').slice(0, 60);
+
+/* På pekskärm hoppar vi över clipboard.read(). Safari visar då en egen
+   Paste-bubbla som ändå inte lämnar ut bilder från andra appar, och man får två
+   dialoger efter varandra utan att något händer. Långtryck i rutan är vägen. */
+const harPekdon = () => matchMedia('(hover: none)').matches;
+
 async function klistraIn(){
   if(!galleriOppet()) return;
   const el = document.getElementById('phPaste');
-  const filer = [];
+  if(harPekdon()){ el?.focus(); return; }
+  const filer = [], spar = [];
   try {
     for(const post of await (navigator.clipboard?.read?.() ?? [])){
+      spar.push(post.types.join('+'));
       const typ = post.types.find(t => t.startsWith('image/'));
       if(typ){
         filer.push(new File([await post.getType(typ)], 'urklipp', { type: typ }));
@@ -1535,22 +1562,24 @@ async function klistraIn(){
         if(f) filer.push(f);
       }
     }
-  } catch(e){}      // tyst – vi har fler vägar
-  if(filer.length){ aterstallPasteTile(); return laggTillBilder(filer); }
+  } catch(e){ spar.push('fel: ' + e.name); }
+  if(filer.length){ urklippsInfo = ''; aterstallPasteTile(); return laggTillBilder(filer); }
   el?.focus();      // låt systemets egen Klistra in-meny ta över
+  visaUrklipp('läsning gav ' + (spar.join(' | ') || 'inget'));
 }
 
 /* Webbläsaren la in bilden i rutan i stället för att skicka den som fil.
    Plocka upp den därifrån och städa rutan. */
-async function bildUrRutan(){
+async function bildUrRutan(info){
   const el = document.getElementById('phPaste');
   if(!el) return;
   const src = el.querySelector('img')?.getAttribute('src');
+  const innehall = rutansInnehall(el);
   aterstallPasteTile();
-  if(!src) return;
+  if(!src) return visaUrklipp(`${info} · rutan fick: ${innehall || 'ingenting'}`);
   const f = await filFranUrl(src).catch(() => null);
-  if(f) laggTillBilder([f]);
-  else toast('Kunde inte läsa den inklistrade bilden.');
+  if(f){ urklippsInfo = ''; return laggTillBilder([f]); }
+  visaUrklipp(`${info} · bild i rutan men gick inte att läsa: ${src.slice(0, 60)}`);
 }
 
 document.addEventListener('paste', e => {
@@ -1560,22 +1589,29 @@ document.addEventListener('paste', e => {
   if(!iRutan && e.target.closest?.('input, textarea, [contenteditable]')) return;
 
   const d = e.clipboardData;
+  const info = `paste: typer ${[...(d?.types || [])].join(', ') || 'inga'} · filer ${d?.files?.length ?? 0}`;
   const filer = [...(d?.files || [])].filter(f => f.type.startsWith('image/'));
-  if(filer.length){ e.preventDefault(); if(iRutan) aterstallPasteTile(); return laggTillBilder(filer); }
-
-  const html = d?.getData?.('text/html');
-  const src = html && imgSrcUrHtml(html);
-  if(src){
-    e.preventDefault();
+  if(filer.length){
+    e.preventDefault(); urklippsInfo = '';
     if(iRutan) aterstallPasteTile();
-    filFranUrl(src).then(f => f && laggTillBilder([f])).catch(() => {});
+    return laggTillBilder(filer);
+  }
+
+  let html = '';
+  try { html = d?.getData?.('text/html') || ''; } catch(err){}
+  const src = imgSrcUrHtml(html);
+  if(src){
+    e.preventDefault(); urklippsInfo = '';
+    if(iRutan) aterstallPasteTile();
+    filFranUrl(src).then(f => f && laggTillBilder([f]))
+      .catch(() => visaUrklipp(`${info} · adress gick inte att läsa`));
     return;
   }
 
   /* Ingen fil och ingen adress. Låt webbläsaren klistra in i rutan som den vill
      och plocka upp resultatet efteråt – det är så Safari gör med bilder från
      andra appar. Utanför rutan låter vi det vara. */
-  if(iRutan) setTimeout(bildUrRutan, 0);
+  if(iRutan) setTimeout(() => bildUrRutan(info), 0);
 });
 
 async function removePhoto(id){
