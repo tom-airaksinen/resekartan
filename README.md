@@ -187,12 +187,18 @@ utvecklingen – det berodde på vilken sorts bild som låg i urklippet, inte p�
 koden. Läxan från den veckan: **logga på skärmen innan du gissar.** Fyra
 omskrivningar byggde på teorier som en enda loggrad hade fällt.
 
-**Rutan har därför två lägen.** Som knapp frågar ett tryck urklippet, vilket
-räcker för skärmdumpar: inget tangentbord, ingen extra bubbla. Säger Safari nej
-blir rutan ett skrivfält (`contenteditable`) och får fokus, så iOS egen Klistra
-in-meny finns på långtryck som andra chans, och en rad under rutnätet säger rakt
-ut vad som hände och att Lägg till från Bilder alltid fungerar. Tangentbordet
-kommer bara i det läget. Efter en lyckad inklistring blir rutan knapp igen.
+**Rutan har därför två lägen, och båda är bekräftade på telefon 2026-09-18.**
+Som knapp frågar ett tryck urklippet, vilket räcker för skärmdumpar: inget
+tangentbord, ingen extra bubbla. Säger Safari nej blir rutan ett skrivfält
+(`contenteditable`) och får fokus, och raden under säger "Håll ner i rutan och
+välj Klistra in". iOS egen inklistring på långtryck lämnar då ut bilden **varje
+gång**, även den Safari nyss vägrade – systemet får det webbsidan inte får.
+Tangentbordet kommer bara i det läget. Efter en lyckad inklistring blir rutan
+knapp igen.
+
+Det går inte att slå ihop till ett steg: `read()` måste provas först för att
+skärmdumpar ska gå på ett tryck, och först när den svarar typlöst vet appen att
+långtryck behövs.
 
 Loggen (`phLog`, styrs av `PH_LOG_ON`) visas bara när något gått fel.
 
@@ -404,8 +410,24 @@ filerna från `fonts.gstatic.com`, så från andra starten och framåt ritas rä
 typsnitt direkt. Det finns också en `preconnect` till `fonts.gstatic.com` – utan
 den öppnas anslutningen först när css:en har lästs.
 
+**Den verkliga orsaken till blinket var ändå en annan**, och den hittades först
+efter att typsnittsfixen ovan inte räckte: service workern hade en enda cache som
+byttes ut vid varje version, och `activate` raderade allt annat. Typsnitt,
+kartbibliotek och Firebase-SDK försvann alltså vid varje uppdatering, och första
+starten efteråt hämtade dem från nätet igen. Dessutom laddade sidan om sig själv
+när den nya arbetaren tog över, mitt i uppstarten. Under en dag med fyrtio
+versioner var varje start en "första start efter uppdatering", och blinket
+såg ut att vara permanent.
+
+Nu finns två cachar. `resekartan-vNN` för appens egna filer byts vid varje version.
+`resekartan-static` för typsnitt, cdnjs och Firebase-SDK överlever versionsbyten;
+adresserna där bär sin egen version och ändras aldrig. Typsnittsfilerna plockas ut
+ur css:en redan vid installationen så de finns från första starten. Omladdningen
+vid `controllerchange` är borttagen: sidan och `app.js` går ändå nätverket först,
+så en start får alltid senaste koden.
+
 Byter man typsnitt måste adressen uppdateras på båda ställena: `index.html` och
-`SHELL` i `sw.js`.
+`FONT_CSS` i `sw.js`.
 
 ### Låsskärmen är också startbilden
 

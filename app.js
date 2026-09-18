@@ -14,7 +14,7 @@ const AUTH = {
   hash: '5805d07268265f31365760d2aa2a450e97629e0d6a43c36829b54b3d971026c7'
 };
 const LS_KEY = 'resekartan.data', LS_AUTH = 'resekartan.unlocked', LS_SEEN = 'resekartan.inloggad', LS_LEGEND = 'resekartan.legend';
-const APP_VERSION = 'v52';   // följ sw.js CACHE, så man ser vad som faktiskt körs
+const APP_VERSION = 'v53';   // följ sw.js CACHE, så man ser vad som faktiskt körs
 
 /* ============================ Tema ============================
    Temat är per enhet och ligger i localStorage, inte i DB – Hedvig ska kunna ha
@@ -1342,7 +1342,7 @@ function renderPhotos(){
     <p class="hint">${phCache.length > 1
       ? 'Håll på en bild och dra för att flytta den. Den första bilden är omslaget och visas i reselistorna. '
       : phCache.length ? '' : 'Lägg till några favoriter från resan. Bilderna krymps innan de sparas, så de tar liten plats. '}
-      Klistra in fungerar för skärmdumpar och bilder från webben. Bilder kopierade ur andra appar släpper Safari inte alltid ifrån sig; spara dem till Bilder och tryck Lägg till.${
+      Klistra in: skärmdumpar går med ett tryck. Bilder kopierade ur andra appar kräver ett tryck till: håll ner i rutan och välj Klistra in.${
         urklippsInfo ? `<br><span class="urklipp" style="color:var(--danger)">${esc(urklippsInfo)}</span>` : ''}</p>${
         PH_LOG_ON && urklippsInfo && phLog.length ? `<pre id="phLog" class="phlog">${esc(phLog.join('\n'))}</pre>` : ''}`;
 }
@@ -1540,7 +1540,7 @@ const imgSrcUrHtml = html => html.match(/<img[^>]+src="([^"]+)"/i)?.[1] || null;
    Varje steg skrivs till en synlig logg under rutnätet. Inklistring på iPhone
    går inte att felsöka i blindo, och en toast hinner försvinna innan man läst
    den. Loggen tas bort när det fungerar. */
-const PH_LOG_ON = true;
+const PH_LOG_ON = false;      // slå på vid felsökning – skriver varje steg under rutnätet
 const phLog = [];
 function logga(txt){
   if(!PH_LOG_ON) return;
@@ -1636,9 +1636,12 @@ async function klistraIn(){
   } catch(e){ spar.push('fel: ' + e.name); logga(`read fel: ${e.name} ${e.message || ''}`); }
   logga(`read gav ${filer.length} bild(er)`);
   if(filer.length){ urklippsInfo = ''; aterstallPasteTile(); return laggTillBilder(filer); }
+  /* Typlös post = bild kopierad ur en annan app, som Google Photos. Safari
+     lämnar inte ut den till sidan, men iOS egen inklistring på långtryck gör det
+     – bekräftat på telefon 2026-09-18, fungerar varje gång. */
   visaUrklipp(spar.some(x => x === '(utan typer)')
-    ? 'Safari lämnar inte ut just den här bilden till appen. Prova: håll ner i rutan och välj Klistra in. Annars: spara bilden till Bilder och tryck Lägg till.'
-    : 'Urklippet innehöll ingen bild (' + (spar.join(' | ') || 'tomt') + ').');
+    ? 'Håll ner i rutan och välj Klistra in.'
+    : 'Urklippet innehöll ingen bild.');
   if(el) oppnaSkrivfalt(el);      // andra chansen: iOS egen meny på långtryck
 }
 
@@ -3324,14 +3327,13 @@ function start(){
 
 /* Körs sist: start() rör kartans konstanter, som måste vara initialiserade först.
    Ingen try runt openApp – ett fel där ska synas, inte sväljas. */
+/* Ingen omladdning när en ny service worker tar över. Sidan och app.js går
+   redan nätverket först, så en start får alltid senaste koden ändå; det nya
+   arbetaren tillför är bara färsk cache för det tunga. Omladdningen som fanns
+   här startade om appen mitt i uppstarten varje gång en version släppts, och
+   det syntes som ett blink. */
 function registerSW(){
   if(!('serviceWorker' in navigator) || location.protocol === 'file:') return;
-  let reloading = false;
-  navigator.serviceWorker.addEventListener('controllerchange', () => {
-    if(reloading) return;
-    reloading = true;
-    location.reload();
-  });
   addEventListener('load', async () => {
     try {
       const reg = await navigator.serviceWorker.register('sw.js');
