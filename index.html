@@ -276,6 +276,9 @@ body.no-top #view-settings{padding-top:calc(12px + env(safe-area-inset-top,0px))
 @media (max-width:899px){
   .legend{display:none}
   body.visa-legend .legend{display:flex}
+  /* Teckenförklaringen hör till kartan, så knappen har ingen verkan i de
+     andra flikarna och ska inte stå kvar där. */
+  body:not([data-tab="karta"]) #legendBtn{display:none}
 }
 @media (min-width:900px){ #legendBtn{display:none} }
 .handle{flex:none;display:flex;align-items:center;justify-content:center;height:34px;width:100%;

@@ -14,7 +14,7 @@ const AUTH = {
   hash: '5805d07268265f31365760d2aa2a450e97629e0d6a43c36829b54b3d971026c7'
 };
 const LS_KEY = 'resekartan.data', LS_AUTH = 'resekartan.unlocked', LS_SEEN = 'resekartan.inloggad', LS_LEGEND = 'resekartan.legend';
-const APP_VERSION = 'v39';   // följ sw.js CACHE, så man ser vad som faktiskt körs
+const APP_VERSION = 'v40';   // följ sw.js CACHE, så man ser vad som faktiskt körs
 
 /* ============================ Tema ============================
    Temat är per enhet och ligger i localStorage, inte i DB – Hedvig ska kunna ha
@@ -371,7 +371,24 @@ const isHome = iso => iso === DB.home?.iso;
 /* ============================ Format ============================ */
 const MON = ['jan','feb','mar','apr','maj','jun','jul','aug','sep','okt','nov','dec'];
 const dt = s => new Date(s + 'T12:00:00');
-const days = t => Math.max(1, Math.round((dt(t.end) - dt(t.start)) / 864e5) + 1);
+const days = t => {
+  const a = dt(t.start), b = dt(t.end);
+  if(isNaN(a) || isNaN(b)) return 0;       // en resa utan datum ska inte bli NaN
+  return Math.max(1, Math.round((b - a) / 864e5) + 1);
+};
+/* Alla kalenderdagar familjen varit borta, som ett set av datum.
+   Två skäl att räkna så här i stället för att summera resornas längder:
+   åkte två delar av familjen åt olika håll samma vecka var det en vecka borta,
+   inte två, och en resa över nyår ska fördelas på rätt år. */
+function travelDays(list){
+  const dagar = new Set();
+  done(list).forEach(t => {
+    const a = dt(t.start), b = dt(t.end);
+    if(isNaN(a) || isNaN(b) || b < a) return;
+    for(const d = new Date(a); d <= b; d.setDate(d.getDate() + 1)) dagar.add(ymd(d));
+  });
+  return dagar;
+}
 function span(a, b){
   if(!a) return 'datum saknas';
   if(!b) b = a;
@@ -477,16 +494,12 @@ const km = v => Math.round(v / 10) * 10 >= 1000
 
 function stats(list){
   const l = done(list), countries = new Set(), places = new Set();
-  let dd = 0;
-  l.forEach(t => {
-    dd += days(t);
-    t.stops.forEach(s => {
-      if(!inFilter(t, s)) return;
-      if(!isHome(s.iso)) countries.add(s.iso);
-      (s.places || []).forEach(p => places.add(p.name));
-    });
-  });
-  return { countries: countries.size, places: places.size, trips: l.length, days: dd };
+  l.forEach(t => t.stops.forEach(s => {
+    if(!inFilter(t, s)) return;
+    if(!isHome(s.iso)) countries.add(s.iso);
+    (s.places || []).forEach(p => places.add(p.name));
+  }));
+  return { countries: countries.size, places: places.size, trips: l.length, days: travelDays(list).size };
 }
 
 /* ============================ Bilder ============================
@@ -1751,6 +1764,7 @@ function setLegend(on, save = true){
   legendBtn?.setAttribute('aria-label', on ? 'Dölj teckenförklaring' : 'Visa teckenförklaring');
   if(save){ try { localStorage.setItem(LS_LEGEND, on ? '1' : '0'); } catch(e){} }
 }
+document.body.dataset.tab = 'karta';     // startläget, innan setTab körts
 try { setLegend(localStorage.getItem(LS_LEGEND) === '1', false); } catch(e){ setLegend(false, false); }
 legendBtn?.addEventListener('click', e => {
   e.stopPropagation();
@@ -1840,7 +1854,8 @@ function renderViews(){
   ];
   const maxC = Math.max(1, ...per.map(x => x[1]));
   const years = {};
-  done(list).forEach(t => { const y = (t.start||'????').slice(0,4); years[y] = (years[y]||0) + days(t); });
+  // Dag för dag, så en resa över nyår hamnar på båda åren
+  travelDays(list).forEach(d => { const y = d.slice(0, 4); years[y] = (years[y] || 0) + 1; });
   const maxY = Math.max(1, ...Object.values(years));
   const longest = [...done(list)].sort((a,b) => days(b) - days(a))[0];
   const cc = {};
@@ -2134,6 +2149,7 @@ function setTab(t){
   tab = t;
   // Väljaren gäller resor och statistik, inte inställningar – där skulle den bara
   // se ut som att inställningarna var personliga
+  document.body.dataset.tab = t;          // infoknappen hör bara hemma på kartan
   document.body.classList.toggle('no-top', t === 'settings');
   if(t === 'settings') closeWho();
   document.querySelectorAll('#tabs [role=tab]').forEach(b => b.setAttribute('aria-selected', String(b.dataset.tab === t)));

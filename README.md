@@ -175,6 +175,22 @@ Tre fällor:
   samma bild syns två gånger fast räknaren säger rätt antal. Omritningen skjuts
   upp till draget släppts (`phDrag.pending`).
 
+### Resdagar räknas som kalenderdagar
+
+`travelDays()` bygger ett set av datum och räknar dess storlek, i stället för att
+summera resornas längder. Två saker faller ut av det:
+
+- **Överlappande resor räknas en gång.** Åkte Tom och Aron åt ett håll samtidigt
+  som Karin och Hedvig åkte åt ett annat var familjen borta en vecka, inte två.
+- **En resa över nyår hamnar på rätt år.** 27 dec till 4 jan ger fem dagar på det
+  gamla året och fyra på det nya, i stället för nio på det gamla.
+
+Avstickare och flera länder i samma resa har aldrig räknats dubbelt – dagarna kom
+alltid från resans egna datum, inte från stoppen. Det kontrollerades 2026-09-18.
+
+`days()` returnerar 0 i stället för `NaN` för en resa utan giltiga datum. Förut
+förgiftade en sådan resa hela summan.
+
 ### Färgskalan på kartan
 
 Besökta länder färgas efter hur många resor som gått dit, i tre steg: `--v1`,
@@ -206,6 +222,9 @@ skriver. Innan dess låg den bakom arket och syntes aldrig på en telefon.
 På telefonen är den **av som standard** och fälls upp med infoknappen i toppraden;
 valet ligger kvar på enheten. Från 900 px och uppåt finns plats, och då ligger den
 framme hela tiden utan knapp.
+
+Knappen visas bara i kartfliken (`body[data-tab]`). I de andra flikarna finns ingen
+karta att förklara, och den skulle bara se trasig ut.
 
 ### Alla resor är inte samma sak som hela familjen
 
