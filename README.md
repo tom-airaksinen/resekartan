@@ -250,6 +250,24 @@ Samma motiv ligger inlagt som SVG i låsskärmen i `index.html`. Det är med fli
 kopia och inte `icon.svg`: en bild till hade blivit ännu en begäran innan sidan
 kan visa något. Ändrar man ikonen behöver båda ställena uppdateras.
 
+### Typsnitten får inte blinka in
+
+Appnamnet blinkade till vid varje start: texten ritades först i reservtypsnittet
+och byttes sedan mot Bricolage Grotesque när filen kommit.
+
+Två saker orsakade det. Länken till Google Fonts stod på `display=swap`, vilket är
+just instruktionen att byta in typsnittet mitt i, och service workern cachade inte
+typsnittsfilerna, så de hämtades på nytt vid varje start.
+
+Nu gäller `display=optional`: reservtypsnittet används bara om filen inte redan
+finns, och då byts den aldrig i efterhand. Service workern cachar både css:en och
+filerna från `fonts.gstatic.com`, så från andra starten och framåt ritas rätt
+typsnitt direkt. Det finns också en `preconnect` till `fonts.gstatic.com` – utan
+den öppnas anslutningen först när css:en har lästs.
+
+Byter man typsnitt måste adressen uppdateras på båda ställena: `index.html` och
+`SHELL` i `sw.js`.
+
 ### Låsskärmen är också startbilden
 
 Formuläret ligger dolt i markupen och visas först när någon faktiskt behöver logga

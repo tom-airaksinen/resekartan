@@ -11,7 +11,15 @@
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="icon" href="icon-192.png" sizes="192x192">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,600;12..96,700&family=Figtree:wght@400;500;600&display=swap">
+<!-- Typsnittsfilerna kommer härifrån, inte från googleapis – utan den här raden
+     öppnas anslutningen först när css:en har lästs. -->
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<!-- display=optional, inte swap: swap är just instruktionen att byta in
+     typsnittet när det kommit, och det är bytet som blinkar till vid start.
+     Med optional används reservtypsnittet bara om filen inte redan finns, och
+     då byts den aldrig mitt i. Service workern cachar filerna, så från andra
+     starten och framåt ritas rätt typsnitt direkt. -->
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,600;12..96,700&family=Figtree:wght@400;500;600&display=optional">
 <style>
 :root{
   --ocean:#D3E2EA; --ocean-2:#C2D8E4; --land:#EDE9E0; --land-line:#FBFAF7; --coast:#FFFFFF;
