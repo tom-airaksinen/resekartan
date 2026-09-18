@@ -137,6 +137,12 @@ Två saker som annars blinkar:
   alla tre skulle bilden man just glidit fram till avkodas en gång till.
 - Originalet avkodas färdigt med `decode()` innan det byts in, annars hinner rutan
   bli tom ett ögonblick.
+- **En tom ruta måste ligga kvar i flödet.** Gömdes den med `hidden` föll den ur
+  flexraden, de två andra gled ett steg åt vänster, och spåret – som alltid står
+  på `-100%` – hamnade på nästa bild i stället för den man valde. Det slog bara
+  till på första bilden, där rutan före är tom, och gav symtomen "första
+  miniatyren öppnar bild två" och "bild två visas igen när man sveper dit". Det är
+  bara `<img>` som göms.
 
 Svepet låter bilden följa fingret, och i ändarna dämpas dragningen till en
 tredjedel så den tar emot i stället för att glida ut i tomma intet. `touch-action:

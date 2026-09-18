@@ -14,7 +14,7 @@ const AUTH = {
   hash: '5805d07268265f31365760d2aa2a450e97629e0d6a43c36829b54b3d971026c7'
 };
 const LS_KEY = 'resekartan.data', LS_AUTH = 'resekartan.unlocked', LS_SEEN = 'resekartan.inloggad', LS_LEGEND = 'resekartan.legend';
-const APP_VERSION = 'v33';   // följ sw.js CACHE, så man ser vad som faktiskt körs
+const APP_VERSION = 'v34';   // följ sw.js CACHE, så man ser vad som faktiskt körs
 
 /* ============================ Tema ============================
    Temat är per enhet och ligger i localStorage, inte i DB – Hedvig ska kunna ha
@@ -1491,10 +1491,20 @@ function fyllRuta(n, i){
   const slide = vTrack().children[n];
   if(!slide) return;
   const img = slide.querySelector('img'), p = phCache[i];
-  const src = p ? fullEllerPrev(p) : '';
+  /* Rutan måste ligga kvar i flödet även när den är tom. Göms den försvinner
+     den ur flexraden, de andra två glider ett steg åt vänster, och spåret –
+     som alltid står på -100% – hamnar då på nästa bild i stället för den man
+     valde. Det slog bara till på första bilden, där rutan före är tom. */
+  if(!p){
+    img.hidden = true;
+    img.removeAttribute('src');
+    img.alt = '';
+    return;
+  }
+  const src = fullEllerPrev(p);
   if(img.getAttribute('src') !== src) img.src = src;
-  img.alt = p ? `Bild ${i + 1} från resan` : '';
-  slide.hidden = !p;
+  img.alt = `Bild ${i + 1} från resan`;
+  img.hidden = false;
 }
 function byggRutor(){
   const track = vTrack();
