@@ -310,8 +310,9 @@ h2.sec:first-child{margin-top:8px}
 .trip[data-trip]{grid-template-columns:96px 1fr auto;padding:12px 0}
 .trip[data-trip] .flag{display:grid;place-items:center;width:96px;height:72px;border-radius:12px;
   background:var(--surface-2);font-size:30px}
-.trip .thumb{display:block;width:96px;height:72px;border-radius:12px;overflow:hidden;background:var(--surface-2)}
-.trip .thumb img{display:block;width:100%;height:100%;object-fit:cover}
+/* Omslagsrutan ser likadan ut var den än används – reselistorna och landvyn */
+.thumb{display:block;width:96px;height:72px;border-radius:12px;overflow:hidden;background:var(--surface-2)}
+.thumb img{display:block;width:100%;height:100%;object-fit:cover}
 .trip .rowflag{font-size:15px;margin-right:6px;vertical-align:1px}
 .tag{display:inline-block;font-size:11px;font-weight:600;padding:1px 7px;border-radius:999px;background:var(--surface-2);color:var(--ink-2);vertical-align:1px;margin-left:6px}
 .tag.side{background:transparent;border:1px dashed var(--ink-3)}
@@ -374,8 +375,11 @@ h2.sec:first-child{margin-top:8px}
 #viewer .vtrack{position:absolute;inset:0;display:flex;will-change:transform;
   transform:translateX(-100%);transition:transform .32s cubic-bezier(.2,.8,.2,1)}
 #viewer .vtrack.dragging{transition:none}
-#viewer .vslide{flex:0 0 100%;display:flex;align-items:center;justify-content:center;padding:0 8px}
-#viewer img{max-width:100%;max-height:100%;object-fit:contain;border-radius:8px;
+#viewer .vslide{flex:0 0 100%;padding:0 8px}
+/* Fast ruta, inte bildens egen storlek. Förhandsbilden är 400 px och originalet
+   flera gånger större; låter man bilden bestämma boxen ritas den först litet och
+   hoppar sedan upp när originalet kommit – tydligast på stående bilder. */
+#viewer img{display:block;width:100%;height:100%;object-fit:contain;
   user-select:none;-webkit-user-select:none;-webkit-user-drag:none;-webkit-touch-callout:none}
 @media (prefers-reduced-motion: reduce){ #viewer .vtrack{transition:none} }
 #viewer .vnav{flex:none;display:flex;justify-content:center;gap:16px;padding:12px 16px calc(16px + env(safe-area-inset-bottom,0px))}
@@ -385,10 +389,15 @@ h2.sec:first-child{margin-top:8px}
 .country p{color:var(--ink-2);margin:4px 0 8px}
 .ctrip{border-top:1px solid var(--line);padding:12px 0}
 .ctrip:first-of-type{border-top:0}
-.ctrip .hdr{display:flex;align-items:flex-start;gap:8px;justify-content:space-between}
+/* Samma liggande ruta som i reselistorna, med landets flagga när resan saknar
+   bild – då blir vänsterkanten rak även när bara någon resa har foton. */
+.ctrip .hdr{display:grid;grid-template-columns:96px 1fr auto;gap:0 12px;align-items:center}
+.ctrip .hdr>span:nth-child(2){min-width:0}
+.ctrip .hdr .flag{display:grid;place-items:center;width:96px;height:72px;border-radius:12px;
+  background:var(--surface-2);font-size:30px;line-height:1}
 .ctrip .hdr b{font-weight:600}
 .ctrip .when{display:block;color:var(--ink-2);font-size:13px;margin-top:1px}
-.ctrip ul{list-style:none;margin:8px 0 0;padding:0;display:flex;flex-direction:column;gap:6px}
+.ctrip ul{list-style:none;margin:10px 0 0;padding:0;display:flex;flex-direction:column;gap:6px}
 .ctrip li{display:grid;grid-template-columns:8px 1fr;gap:10px;align-items:baseline;font-size:14px}
 .ctrip li>div{min-width:0}
 .ctrip li::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--visited);transform:translateY(-1px)}

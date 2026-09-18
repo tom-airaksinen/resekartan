@@ -14,7 +14,7 @@ const AUTH = {
   hash: '5805d07268265f31365760d2aa2a450e97629e0d6a43c36829b54b3d971026c7'
 };
 const LS_KEY = 'resekartan.data', LS_AUTH = 'resekartan.unlocked', LS_SEEN = 'resekartan.inloggad', LS_LEGEND = 'resekartan.legend';
-const APP_VERSION = 'v32';   // följ sw.js CACHE, så man ser vad som faktiskt körs
+const APP_VERSION = 'v33';   // följ sw.js CACHE, så man ser vad som faktiskt körs
 
 /* ============================ Tema ============================
    Temat är per enhet och ligger i localStorage, inte i DB – Hedvig ska kunna ha
@@ -1475,25 +1475,47 @@ let slideBusy = false, vDrag = null;
 
 const fullEllerPrev = p => p.url || fullCache.get(p.id) || p.prev || '';
 
-function viewerSlides(){
+/* Rutorna byggs en gång och återanvänds. Vid ett steg roteras noderna i stället
+   för att ritas om: den ruta som redan syns på skärmen blir den nya mitten, och
+   bara den ruta som hamnat utanför fylls med en ny bild. Ritade vi om alla tre
+   skulle bilden man just glidit fram till avkodas en gång till – det var det som
+   såg ut som att den renderades två gånger. */
+function nollstallSpar(){
   const track = vTrack();
-  track.innerHTML = [vIdx - 1, vIdx, vIdx + 1].map(i => {
-    const p = phCache[i];
-    return p
-      ? `<div class="vslide"><img src="${fullEllerPrev(p)}" alt="Bild ${i + 1} från resan"></div>`
-      : '<div class="vslide"></div>';
-  }).join('');
-  // Nollställ mitten utan att det glider tillbaka synligt
   track.classList.add('dragging');
   track.style.transform = 'translateX(-100%)';
   void track.offsetWidth;
   track.classList.remove('dragging');
 }
+function fyllRuta(n, i){
+  const slide = vTrack().children[n];
+  if(!slide) return;
+  const img = slide.querySelector('img'), p = phCache[i];
+  const src = p ? fullEllerPrev(p) : '';
+  if(img.getAttribute('src') !== src) img.src = src;
+  img.alt = p ? `Bild ${i + 1} från resan` : '';
+  slide.hidden = !p;
+}
+function byggRutor(){
+  const track = vTrack();
+  if(track.children.length !== 3)
+    track.innerHTML = '<div class="vslide"><img alt=""></div>'.repeat(3);
+  [vIdx - 1, vIdx, vIdx + 1].forEach((i, n) => fyllRuta(n, i));
+  nollstallSpar();
+}
+function roteraRutor(d){
+  const track = vTrack();
+  if(d > 0) track.appendChild(track.firstElementChild);
+  else track.insertBefore(track.lastElementChild, track.firstElementChild);
+  nollstallSpar();
+  fyllRuta(d > 0 ? 2 : 0, d > 0 ? vIdx + 1 : vIdx - 1);
+}
 
-function paintViewer(){
+/* Texten, knapparna och hämtningen av originalet. Originalet avkodas färdigt
+   innan det byts in, annars hinner rutan bli tom ett ögonblick. */
+function uppdateraVisare(){
   const p = phCache[vIdx];
   if(!p) return closeViewer();
-  viewerSlides();
   const cnt = document.getElementById('vCount');
   const nr = `${vIdx + 1} / ${phCache.length}`;
   const klar = !!p.url || fullCache.has(p.id);
@@ -1501,14 +1523,27 @@ function paintViewer(){
   document.getElementById('vPrev').disabled = vIdx === 0;
   document.getElementById('vNext').disabled = vIdx >= phCache.length - 1;
   if(klar){ loadFull(phCache[vIdx + 1]); return; }
-  loadFull(p).then(url => {
+  loadFull(p).then(async url => {
+    if(!url){
+      if(!viewerEl.hidden && phCache[vIdx]?.id === p.id) cnt.textContent = `${nr} · kunde inte hämta bilden`;
+      return;
+    }
+    const färdig = new Image();
+    färdig.src = url;
+    try { await färdig.decode(); } catch(e){}
     // Användaren kan ha bläddrat vidare under tiden
     if(viewerEl.hidden || phCache[vIdx]?.id !== p.id) return;
     const img = vTrack().children[1]?.querySelector('img');
-    if(url && img) img.src = url;
-    cnt.textContent = url ? nr : `${nr} · kunde inte hämta bilden`;
+    if(img) img.src = url;
+    cnt.textContent = nr;
     loadFull(phCache[vIdx + 1]);        // nästa i förväg, så bläddringen känns direkt
   });
+}
+
+function paintViewer(){
+  if(!phCache[vIdx]) return closeViewer();
+  byggRutor();
+  uppdateraVisare();
 }
 function step(d){
   const n = vIdx + d;
@@ -1522,7 +1557,9 @@ function step(d){
     if(gjort) return;
     gjort = true;
     track.removeEventListener('transitionend', done);
-    vIdx = n; slideBusy = false; paintViewer();
+    vIdx = n; slideBusy = false;
+    roteraRutor(d);                  // rutan som redan syns blir den nya mitten
+    uppdateraVisare();
   };
   track.addEventListener('transitionend', done);
   setTimeout(done, 450);        // nödutgång om transitionend uteblir
@@ -1588,7 +1625,9 @@ function renderCountry(iso){
     <h2><span class="flag">${flagOf(iso)}</span>${esc(countryName(iso))}${home ? '<span class="tag home-badge">Hemma</span>' : ''}</h2>
     <p>${sum}${home && DB.home.place ? ` · vi bor i ${esc(DB.home.place.name)}` : ''}</p>
     ${groups.map(({ t, st }) => `<div class="ctrip">
-      <div class="hdr"><span><b>${esc(t.title)}</b>${t.planned ? '<span class="tag">Planerad</span>' : ''}${st.side ? '<span class="tag side">Avstickare</span>' : ''}
+      <div class="hdr">
+        ${t.thumb ? `<span class="thumb"><img src="${t.thumb}" alt=""></span>` : `<span class="flag">${flagOf(st.iso)}</span>`}
+        <span><b>${esc(t.title)}</b>${t.planned ? '<span class="tag">Planerad</span>' : ''}${st.side ? '<span class="tag side">Avstickare</span>' : ''}
         <span class="when">${span(stopStart(t, st), stopEnd(t, st))}</span></span>${avs(stopWho(t, st))}</div>
       <ul>${(st.places||[]).map(p => `<li${home ? ' class="home-city"' : ''}><div><b>${esc(p.name)}</b>${p.what ? ` <span>— ${esc(p.what)}</span>` : ''}</div></li>`).join('')}</ul>
       <button class="more" data-trip="${esc(t.id)}">Visa hela resan ›</button>

@@ -94,8 +94,8 @@ resebilder är liggande. `THUMB_V` räknas upp när formatet ändras, så omslag
 redan ligger sparade görs om nästa gång resan öppnas.
 
 Rader utan bild får samma ruta med flaggan i, så vänsterkanten blir rak i en
-blandad lista. Landraderna i Länder rör vi inte – de har aldrig bilder, och
-väljs med `[data-trip]` i väljaren.
+blandad lista. Samma ruta används i landvyns resor. Landraderna i Länder rör vi
+inte – de har aldrig bilder, och väljs med `[data-trip]` i väljaren.
 
 Galleriet visar en förhandsbild på 400 px, inte originalet. Originalet på max
 1400 px hämtas först när man öppnar bilden i helskärm, och visaren målar upp
@@ -126,6 +126,17 @@ Spåret i helskärmsläget håller tre rutor: föregående, den man tittar på, 
 nästa. Att byta bild flyttar spåret en rutbredd åt sidan; när glidningen är klar
 ritas rutorna om med den nya bilden i mitten och spåret nollställs utan övergång.
 Fler än tre rutor vore bara fler avkodade bilder i minnet utan att synas.
+
+Två saker som annars blinkar:
+
+- **Bilden får en fast ruta**, `width:100%;height:100%;object-fit:contain`. Låter
+  man bildens egen storlek bestämma boxen ritas förhandsbilden på 400 px liten och
+  hoppar sedan upp när originalet kommit – tydligast på stående bilder.
+- **Vid ett steg roteras noderna**, de ritas inte om. Rutan som redan syns blir den
+  nya mitten och bara den som hamnat utanför fylls med en ny bild. Ritade vi om
+  alla tre skulle bilden man just glidit fram till avkodas en gång till.
+- Originalet avkodas färdigt med `decode()` innan det byts in, annars hinner rutan
+  bli tom ett ögonblick.
 
 Svepet låter bilden följa fingret, och i ändarna dämpas dragningen till en
 tredjedel så den tar emot i stället för att glida ut i tomma intet. `touch-action:
