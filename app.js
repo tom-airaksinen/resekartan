@@ -14,7 +14,7 @@ const AUTH = {
   hash: '5805d07268265f31365760d2aa2a450e97629e0d6a43c36829b54b3d971026c7'
 };
 const LS_KEY = 'resekartan.data', LS_AUTH = 'resekartan.unlocked', LS_SEEN = 'resekartan.inloggad', LS_LEGEND = 'resekartan.legend';
-const APP_VERSION = 'v49';   // följ sw.js CACHE, så man ser vad som faktiskt körs
+const APP_VERSION = 'v50';   // följ sw.js CACHE, så man ser vad som faktiskt körs
 
 /* ============================ Tema ============================
    Temat är per enhet och ligger i localStorage, inte i DB – Hedvig ska kunna ha
@@ -1330,7 +1330,8 @@ function renderPhotos(){
       ? 'Håll på en bild och dra för att flytta den. Den första bilden är omslaget och visas i reselistorna. '
       : phCache.length ? '' : 'Lägg till några favoriter från resan. Bilderna krymps innan de sparas, så de tar liten plats. '}
       Klistra in: tryck på rutan och sedan på Klistra in när den frågar. Kommer ingen fråga, håll ner i rutan och välj Klistra in i menyn. Går inte det heller: spara bilden till Bilder och använd Lägg till.${
-        urklippsInfo ? `<br><span class="urklipp" style="color:var(--danger)">${esc(urklippsInfo)}</span>` : ''}</p>`;
+        urklippsInfo ? `<br><span class="urklipp" style="color:var(--danger)">${esc(urklippsInfo)}</span>` : ''}</p>${
+        PH_LOG_ON && phLog.length ? `<pre id="phLog" class="phlog">${esc(phLog.join('\n'))}</pre>` : ''}`;
 }
 
 /* ---- Dra för att ändra ordning ----
@@ -1474,8 +1475,9 @@ document.addEventListener('click', e => {
 phInput.addEventListener('change', () => laggTillBilder([...phInput.files]));
 
 async function laggTillBilder(valda){
+  logga(`laggTillBilder: ${valda.length} st, typer ${valda.map(f => f.type || '?').join(',')}`);
   const files = valda.filter(f => f.type.startsWith('image/'));
-  if(!files.length || !phTrip) return;
+  if(!files.length || !phTrip) return logga('laggTillBilder avbryter: inga bildfiler eller ingen resa');
   const box = document.getElementById('phBody');
   const tripAtStart = phTrip;
   let done = 0, failed = 0;
@@ -1490,7 +1492,8 @@ async function laggTillBilder(valda){
     try {
       const rec = await photos.add(tripAtStart, f);
       if(phTrip === tripAtStart) phCache.push(rec);
-    } catch(err){ failed++; }
+      logga('bild sparad');
+    } catch(err){ failed++; logga('sparning fel: ' + (err.message || err)); }
     done++;
   }
   if(phTrip === tripAtStart) renderPhotos();
@@ -1511,12 +1514,41 @@ const galleriOppet = () => !!phTrip && !!document.getElementById('phBody')
    in en <img> i rutan. Alla fyra hanteras, annars fungerar det på datorn men
    inte på telefonen. */
 async function filFranUrl(url, namn = 'urklipp'){
+  logga('hämtar ' + url.slice(0, 40));
   const res = await fetch(url);                 // blob: och data: går bra
   const blob = await res.blob();
+  logga(`hämtat ${blob.type || '(ingen typ)'} ${Math.round(blob.size / 1024)} kB`);
   if(!blob.type.startsWith('image/')) return null;
   return new File([blob], namn, { type: blob.type });
 }
 const imgSrcUrHtml = html => html.match(/<img[^>]+src="([^"]+)"/i)?.[1] || null;
+
+/* ---- Felsökningslogg för inklistring ----
+   Varje steg skrivs till en synlig logg under rutnätet. Inklistring på iPhone
+   går inte att felsöka i blindo, och en toast hinner försvinna innan man läst
+   den. Loggen tas bort när det fungerar. */
+const PH_LOG_ON = true;
+const phLog = [];
+function logga(txt){
+  if(!PH_LOG_ON) return;
+  const t = new Date();
+  phLog.push(`${String(t.getMinutes()).padStart(2,'0')}:${String(t.getSeconds()).padStart(2,'0')} ${txt}`);
+  if(phLog.length > 14) phLog.shift();
+  let el = document.getElementById('phLog');
+  if(!el){
+    const hint = document.querySelector('#phBody .hint');
+    if(!hint) return;
+    hint.insertAdjacentHTML('afterend', '<pre id="phLog" class="phlog"></pre>');
+    el = document.getElementById('phLog');
+  }
+  el.textContent = phLog.join('\n');
+}
+const beskrivDT = d => d
+  ? `typer[${[...(d.types || [])].join(',')}] filer=${d.files?.length ?? '?'} items=${d.items?.length ?? '?'}`
+    + (d.items ? ' ' + [...d.items].map(i => `${i.kind}:${i.type}`).join(',') : '')
+  : 'ingen dataTransfer';
+addEventListener('error', e => logga('FEL ' + (e.message || e.error?.message || '?')));
+addEventListener('unhandledrejection', e => logga('FEL (promise) ' + (e.reason?.message || e.reason?.name || e.reason)));
 
 /* Vad urklippet faktiskt innehöll, i klartext under rutnätet. Inklistring beter
    sig olika i olika webbläsare och går inte att felsöka i blindo. */
@@ -1542,12 +1574,17 @@ const rutansInnehall = el => [...el.childNodes]
    och tog därmed bort den enda väg som någonsin fungerat på iPhone. Långtryck i
    fältet finns kvar som andra väg, men den är inte huvudvägen. */
 async function klistraIn(){
+  logga(`tryck · galleri=${galleriOppet()} · read=${typeof navigator.clipboard?.read}`);
   if(!galleriOppet()) return;
   const el = document.getElementById('phPaste');
   const filer = [], spar = [];
   try {
-    for(const post of await (navigator.clipboard?.read?.() ?? [])){
+    logga('read startar');
+    const poster = await (navigator.clipboard?.read?.() ?? []);
+    logga(`read klar: ${poster.length} poster`);
+    for(const post of poster){
       spar.push(post.types.join('+'));
+      logga('post: ' + post.types.join(','));
       const typ = post.types.find(t => t.startsWith('image/'));
       if(typ){
         filer.push(new File([await post.getType(typ)], 'urklipp', { type: typ }));
@@ -1560,7 +1597,8 @@ async function klistraIn(){
         if(f) filer.push(f);
       }
     }
-  } catch(e){ spar.push('fel: ' + e.name); }
+  } catch(e){ spar.push('fel: ' + e.name); logga(`read fel: ${e.name} ${e.message || ''}`); }
+  logga(`read gav ${filer.length} bild(er)`);
   if(filer.length){ urklippsInfo = ''; aterstallPasteTile(); return laggTillBilder(filer); }
   el?.focus();      // låt systemets egen Klistra in-meny ta över
   visaUrklipp('läsning gav ' + (spar.join(' | ') || 'inget'));
@@ -1570,9 +1608,10 @@ async function klistraIn(){
    Plocka upp den därifrån och städa rutan. */
 async function bildUrRutan(info){
   const el = document.getElementById('phPaste');
-  if(!el) return;
+  if(!el) return logga('bildUrRutan: rutan saknas');
   const src = el.querySelector('img')?.getAttribute('src');
   const innehall = rutansInnehall(el);
+  logga(`rutan efter paste: img=${src ? src.slice(0, 30) : 'nej'} innehåll="${innehall}"`);
   aterstallPasteTile();
   if(!src) return visaUrklipp(`${info} · rutan fick: ${innehall || 'ingenting'}`);
   const f = await filFranUrl(src).catch(() => null);
@@ -1580,37 +1619,59 @@ async function bildUrRutan(info){
   visaUrklipp(`${info} · bild i rutan men gick inte att läsa: ${src.slice(0, 60)}`);
 }
 
+/* iOS kan lämna det inklistrade i beforeinput i stället för i paste – och kan
+   skicka bara det ena. Båda går till samma hantering. */
+document.addEventListener('focusin', e => { if(e.target.id === 'phPaste') logga('rutan fick fokus'); });
+document.addEventListener('focusout', e => { if(e.target.id === 'phPaste') logga('rutan tappade fokus'); });
+document.addEventListener('beforeinput', e => {
+  if(e.inputType !== 'insertFromPaste' || !e.target.closest?.('#phPaste')) return;
+  logga(`beforeinput insertFromPaste · ${beskrivDT(e.dataTransfer)}`);
+  hanteraInklistring(e, e.dataTransfer, true, 'beforeinput');
+});
 document.addEventListener('paste', e => {
+  const t = e.target, namn = t?.id ? '#' + t.id : (t?.tagName || '?');
+  logga(`paste på ${namn} · galleri=${galleriOppet()} · ${beskrivDT(e.clipboardData)}`);
   if(!galleriOppet()) return;
   const iRutan = !!e.target.closest?.('#phPaste');
+  hanteraInklistring(e, e.clipboardData, iRutan, 'paste');
+});
+function hanteraInklistring(e, d, iRutan, kanal){
   // Klistrar man in i ett vanligt textfält ska texten dit, inte bli en bild
   if(!iRutan && e.target.closest?.('input, textarea, [contenteditable]')) return;
+  if(hanterad === e.timeStamp) return;      // paste och beforeinput för samma tryck
 
-  const d = e.clipboardData;
-  const info = `paste: typer ${[...(d?.types || [])].join(', ') || 'inga'} · filer ${d?.files?.length ?? 0}`;
-  const filer = [...(d?.files || [])].filter(f => f.type.startsWith('image/'));
+  const info = `${kanal}: typer ${[...(d?.types || [])].join(', ') || 'inga'} · filer ${d?.files?.length ?? 0}`;
+  let filer = [...(d?.files || [])].filter(f => f.type.startsWith('image/'));
+  // items kan bära bilden fast files är tom
+  if(!filer.length && d?.items)
+    filer = [...d.items].filter(i => i.kind === 'file' && i.type.startsWith('image/')).map(i => i.getAsFile()).filter(Boolean);
   if(filer.length){
+    hanterad = e.timeStamp;
+    logga(`${kanal}: ${filer.length} fil(er) → lägger till`);
     e.preventDefault(); urklippsInfo = '';
     if(iRutan) aterstallPasteTile();
     return laggTillBilder(filer);
   }
 
   let html = '';
-  try { html = d?.getData?.('text/html') || ''; } catch(err){}
+  try { html = d?.getData?.('text/html') || ''; } catch(err){ logga('getData html fel: ' + err.message); }
   const src = imgSrcUrHtml(html);
   if(src){
+    hanterad = e.timeStamp;
+    logga(`${kanal}: html med img → hämtar`);
     e.preventDefault(); urklippsInfo = '';
     if(iRutan) aterstallPasteTile();
     filFranUrl(src).then(f => f && laggTillBilder([f]))
-      .catch(() => visaUrklipp(`${info} · adress gick inte att läsa`));
+      .catch(err => { logga('hämtning fel: ' + err.message); visaUrklipp(`${info} · adress gick inte att läsa`); });
     return;
   }
 
   /* Ingen fil och ingen adress. Låt webbläsaren klistra in i rutan som den vill
      och plocka upp resultatet efteråt – det är så Safari gör med bilder från
      andra appar. Utanför rutan låter vi det vara. */
-  if(iRutan) setTimeout(() => bildUrRutan(info), 0);
-});
+  if(iRutan && kanal === 'paste'){ logga('paste: inget direkt – väntar på rutan'); setTimeout(() => bildUrRutan(info), 0); }
+}
+let hanterad = 0;
 
 async function removePhoto(id){
   if(!await ask('Ta bort bilden?', 'Ta bort')) return;
