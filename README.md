@@ -142,17 +142,24 @@ Tre fällor:
 
 ### Färgskalan på kartan
 
-Besökta länder färgas efter hur många resor som gått dit: `--v1` för en resa,
-`--v2` för två till tre, `--v3` för fyra eller fler. Klassgränserna är **fasta,
-inte relativa**. Kvartiler eller Jenks-brytpunkter skulle färga om hela kartan
-varje gång en resa läggs till, och teckenförklaringen skulle byta betydelse utan
-att något egentligen ändrats. Med så här små tal går fasta gränser dessutom att
-läsa rakt av.
+Besökta länder färgas efter hur många resor som gått dit, i tre steg: `--v1`,
+`--v2`, `--v3`. Skalan är **relativ mot den vy man har framför sig** – mörkast är
+alltid det mest besökta landet bland de resor som visas, ljusast är ett besök.
+Filtrerar man på en person styr hennes fördelning, så tre resor kan vara mörkast
+för en i familjen och ljusast för en annan.
+
+Absoluta gränser (1 / 2–3 / 4+) provades först och gjorde kartan platt för den
+som rest mindre: har man som mest varit tre gånger någonstans hamnar allt i
+samma ton, och det roliga med att se sitt eget mest besökta land försvinner.
+
+Priset för en relativ skala är att en nyans inte betyder samma sak hela tiden.
+Det löses genom att teckenförklaringen skriver ut de faktiska talen – `legendRamp()`
+räknar fram vilka antal som hamnar i vilket steg och visar bara de steg som
+används. Skalan får aldrig vara en gissning.
 
 Tre steg räcker. Fler nyanser går ändå inte att skilja åt i ett litet land på en
-telefonskärm, och familjen åker sällan till samma land mer än en handfull gånger.
-Stegen är jämna i ljushet, inte i mättnad, så skillnaden syns lika tydligt mellan
-varje par.
+telefonskärm. Stegen är jämna i ljushet, inte i mättnad, så skillnaden syns lika
+tydligt mellan varje par.
 
 Ytorna är **platta, inte gradienter**. En gradient gjorde att samma antal resor
 såg olika ut beroende på var på jorden landet låg, vilket är precis vad en
@@ -160,6 +167,25 @@ färgskala inte får göra.
 
 Teckenförklaringen ankras ovanför bottenarket via `--sheet-h`, som `setSheet()`
 skriver. Innan dess låg den bakom arket och syntes aldrig på en telefon.
+
+### Toppraden på kartan
+
+`#top` har `align-items:flex-start`, och det är inte kosmetik. Utan den sträcker
+sig raderna över hela scenen, och eftersom de bär `pointer-events:auto` lägger de
+en osynlig yta ovanpå sidopanelens överkant. Där sitter Tillbaka-knappen, som
+därmed slutade svara på klick utan att något syntes vara fel.
+
+På desktop står sökfältet framme hela tiden i stället för att slås på med ett
+förstoringsglas: där finns plats, och då behövs varken knappen eller Avbryt.
+`#top` slutar också före panelen, så ingenting i toppraden kan nå in under den.
+
+### Tillbaka landar där man kom ifrån
+
+`backTab` minns vilken flik resan öppnades från. Öppnar man en resa ur Resor
+hamnar man på kartan, och då är reselistan det man vill tillbaka till – inte
+kartans ark. `clearSel()` har medvetet ingen tidig retur: ett tryck ska alltid
+rita om, annars kan knappen kännas död i lägen där `sel` nollställts på annat
+håll.
 
 ### Appikonen
 

@@ -162,7 +162,10 @@ label.fl{display:block;font-size:13px;font-weight:600;color:var(--ink-2);margin:
 /* ---------- Kartans överlägg ---------- */
 body.no-top #top{display:none}
 body.no-top #view-settings{padding-top:calc(12px + env(safe-area-inset-top,0px))}
-#top{position:absolute;left:0;right:0;top:0;z-index:6;display:flex;flex-direction:column;gap:10px;pointer-events:none;
+/* align-items:flex-start är inte kosmetik: utan den sträcker sig raderna över
+   hela scenen, och eftersom de har pointer-events:auto lägger de en osynlig yta
+   ovanpå sidopanelens överkant – precis där Tillbaka-knappen sitter. */
+#top{position:absolute;left:0;right:0;top:0;z-index:6;display:flex;flex-direction:column;align-items:flex-start;gap:10px;pointer-events:none;
   padding-top:calc(10px + env(safe-area-inset-top,0px));
   padding-left:calc(16px + env(safe-area-inset-left,0px));
   padding-right:calc(16px + env(safe-area-inset-right,0px))}
@@ -237,7 +240,7 @@ body.no-top #view-settings{padding-top:calc(12px + env(safe-area-inset-top,0px))
 .srch-res .msg{margin:0;padding:12px 14px;font-size:13.5px;color:var(--ink-3)}
 .view .srch{margin:0 0 14px}
 /* På kartan: förstoringsglaset byter ut toppraden mot fältet */
-#top .searchrow{display:none;align-items:center;gap:8px}
+#top .searchrow{display:none;align-items:center;gap:8px;width:100%;max-width:440px}
 #top .searchrow .srch{flex:1}
 #top .searchrow .in{border:0;background:var(--surface);box-shadow:0 2px 10px rgba(0,0,0,.08)}
 #top .searchrow .cancel{flex:none;height:40px;padding:0 14px;border-radius:999px;background:var(--surface);box-shadow:0 2px 10px rgba(0,0,0,.08);font-weight:600;color:var(--ink-2)}
@@ -556,6 +559,14 @@ h2.sec:first-child{margin-top:8px}
   #sheet{left:auto;right:0;top:0;width:420px;height:auto!important;border-radius:0;box-shadow:-6px 0 24px rgba(0,0,0,.08);border-left:1px solid var(--line)}
   .handle{display:none}
   .sheet-body{padding-top:16px}
+  /* Toppraden ska aldrig nå in under sidopanelen */
+  #top{right:436px}
+  /* Här finns plats: sökfältet står framme hela tiden, utan knapp att slå på
+     det med och utan Avbryt att stänga det med. */
+  #searchBtn{display:none}
+  #top .searchrow{display:flex;max-width:320px}
+  #top .searchrow .cancel{display:none}
+  #top.searching .toprow{display:flex}
   .zoom{display:flex;right:436px;top:16px}
   #tabs{order:0;flex-direction:column;width:76px;border-top:0;border-right:1px solid var(--line);justify-content:flex-start;padding-top:14px}
   #tabs button{flex:none;padding:12px 0}
@@ -631,7 +642,7 @@ h2.sec:first-child{margin-top:8px}
     <div class="zoom"><button id="zin" aria-label="Zooma in">+</button><button id="zout" aria-label="Zooma ut">−</button></div>
     <div class="legend" id="legend">
       <div><i class="l-h"></i>Hemma</div>
-      <div class="l-ramp">Besökt<i class="l-v1"></i><i class="l-v2"></i><i class="l-v3"></i><em>1 · 2–3 · 4+</em></div>
+      <div class="l-ramp" id="legRamp" hidden></div>
       <div><i class="l-s"></i>Avstickare</div><div><i class="l-p"></i>Planerad resa</div>
     </div>
     <div id="pickbar" hidden><span id="pickText">Peka på kartan där platsen ligger.</span><button class="btn ghost" id="pickCancel">Avbryt</button></div>

@@ -14,7 +14,7 @@ const AUTH = {
   hash: '5805d07268265f31365760d2aa2a450e97629e0d6a43c36829b54b3d971026c7'
 };
 const LS_KEY = 'resekartan.data', LS_AUTH = 'resekartan.unlocked', LS_SEEN = 'resekartan.inloggad';
-const APP_VERSION = 'v26';   // följ sw.js CACHE, så man ser vad som faktiskt körs
+const APP_VERSION = 'v27';   // följ sw.js CACHE, så man ser vad som faktiskt körs
 
 /* ============================ Tema ============================
    Temat är per enhet och ligger i localStorage, inte i DB – Hedvig ska kunna ha
@@ -821,11 +821,29 @@ function placeLabels(u){
     });
 }
 
-/* Fasta klassgränser, inte kvartiler: med så här små tal skulle en enda ny resa
-   annars färga om hela kartan och teckenförklaringen byta betydelse. 1 / 2–3 /
-   4+ står still och går att läsa rakt av. Tre steg räcker – fler nyanser går
-   ändå inte att skilja åt på en telefonskärm. */
-const heatNivå = n => n >= 4 ? ' v3' : n >= 2 ? ' v2' : ' v1';
+/* Skalan är relativ: mörkast är alltid det mest besökta landet i den vy man har
+   framför sig, ljusast är ett besök. Filtrerar man på en person är det hennes
+   fördelning som styr, så tre resor kan vara mörkast för en och ljusast för en
+   annan. Absoluta gränser gjorde kartan platt för den som rest mindre.
+
+   Priset är att en nyans inte betyder samma sak hela tiden. Det löses genom att
+   teckenförklaringen skriver ut de faktiska talen i stället för att antyda dem.
+
+   Tre steg: fler nyanser går ändå inte att skilja åt i ett litet land. */
+const heatNivå = (n, max) => max <= 1 ? 1 : 1 + Math.round((n - 1) / (max - 1) * 2);
+
+function legendRamp(max){
+  const el = document.getElementById('legRamp');
+  if(!el) return;
+  el.hidden = !max;
+  if(!max) return;
+  const grupper = [[], [], []];
+  for(let n = 1; n <= max; n++) grupper[heatNivå(n, max) - 1].push(n);
+  const rutor = grupper.map((g, i) => g.length ? `<i class="l-v${i + 1}"></i>` : '').join('');
+  const tal = grupper.filter(g => g.length)
+    .map(g => g[0] === g.at(-1) ? g[0] : `${g[0]}–${g.at(-1)}`).join(' · ');
+  el.innerHTML = `Besökt${rutor}<em>${tal} ${max === 1 ? 'resa' : 'resor'}</em>`;
+}
 
 function paint(){
   const antal = {}, p = new Set();
@@ -840,9 +858,11 @@ function paint(){
     });
   });
   Object.keys(antal).forEach(i => p.delete(i));
+  const max = Math.max(0, ...Object.values(antal));
+  legendRamp(max);
   d3.select('#countries').selectAll('path').attr('class', f =>
     'land' + (isHome(f.id) ? ' home hit' : '')
-    + (antal[f.id] ? ' visited hit' + heatNivå(antal[f.id]) : '')
+    + (antal[f.id] ? ' visited hit v' + heatNivå(antal[f.id], max) : '')
     + (p.has(f.id) ? ' planned hit' : ''));
   d3.select('#pins').selectAll('g')
     .classed('active', q => q.t.id === sel).classed('dim', q => sel && q.t.id !== sel);
@@ -902,9 +922,17 @@ function flyToCountry(iso){
   fitBox(b[0] - mx, b[1] - my, b[2] + mx, b[3] + my, 150, .85);
 }
 function resetZoom(){ ease(svg).call(zoom.transform, d3.zoomIdentity); }
+/* Tillbaka ska landa där man kom ifrån. Öppnar man en resa ur Resor hamnar man
+   på kartan, och då är reselistan det man vill tillbaka till – inte kartans ark.
+   Ingen tidig retur här: ett tryck ska alltid rita om, annars kan knappen kännas
+   död i lägen där sel råkat nollställas på annat håll. */
+let backTab = 'karta';
 function clearSel(){
-  if(!sel && !selCountry) return;
-  sel = null; selCountry = null; drawPins(); renderSheet(); resetZoom();
+  const till = backTab;
+  backTab = 'karta';
+  sel = null; selCountry = null;
+  drawPins(); renderSheet(); resetZoom();
+  if(till !== 'karta' && till !== tab) setTab(till);
 }
 svg.on('click', () => { if(!pickTarget) clearSel(); });
 // Samma rörelseinställning som resten av kartan
@@ -1471,9 +1499,11 @@ document.addEventListener('click', e => {
 function showTrip(id){
   const t = DB.trips.find(x => x.id === id);
   if(!t) return;
+  backTab = tab;
   sel = id; selCountry = null; setTab('karta'); drawPins(); renderSheet(); flyTo(t);
 }
 function showCountry(iso){
+  backTab = tab;
   selCountry = iso; sel = null; setTab('karta'); drawPins(); renderSheet(); flyToCountry(iso);
 }
 async function removeTrip(id){
@@ -1938,7 +1968,7 @@ document.getElementById('tabs').addEventListener('click', e => {
   // Trycker man på fliken man redan står i backar man ut till dess grundvy,
   // som i de flesta iOS-appar
   if(b.dataset.tab === 'karta' && tab === 'karta'){
-    if(sel || selCountry) clearSel();
+    if(sel || selCountry){ backTab = 'karta'; clearSel(); }
     else setSheet(.5);
   }
   setTab(b.dataset.tab);
