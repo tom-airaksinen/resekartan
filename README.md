@@ -225,6 +225,9 @@ sparas i `t.link` och visas som en rad i resedetaljen, med ett namn som härleds
 värdnamnet (`linkName()` känner igen Google Photos, iCloud och några till, annars
 visas domänen).
 
+Importen läser också en länk: står en adress var som helst på raden plockas den
+bort innan resten tolkas, så den inte förväxlas med datum eller ortnamn.
+
 `cleanUrl()` släpper bara igenom http och https, och lägger till https när
 protokollet saknas. Fältet renderas som en `href`, så inget annat protokoll får ta
 sig in. Vill man ha flera länkar per resa längre fram är `t.link` det som behöver

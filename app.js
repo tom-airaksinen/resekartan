@@ -14,7 +14,7 @@ const AUTH = {
   hash: '5805d07268265f31365760d2aa2a450e97629e0d6a43c36829b54b3d971026c7'
 };
 const LS_KEY = 'resekartan.data', LS_AUTH = 'resekartan.unlocked', LS_SEEN = 'resekartan.inloggad', LS_LEGEND = 'resekartan.legend';
-const APP_VERSION = 'v38';   // följ sw.js CACHE, så man ser vad som faktiskt körs
+const APP_VERSION = 'v39';   // följ sw.js CACHE, så man ser vad som faktiskt körs
 
 /* ============================ Tema ============================
    Temat är per enhet och ligger i localStorage, inte i DB – Hedvig ska kunna ha
@@ -2796,6 +2796,18 @@ function parseAlbum(line){
   let s = String(line).trim().replace(/\s+/g, ' ');
   if(!s) return null;
 
+  /* Länk var som helst på raden, typiskt ett album i Google Photos. Den plockas
+     bort först: en adress innehåller både siffror och ord som annars skulle
+     läsas som datum eller ortnamn. */
+  let link = '';
+  const um = s.match(/(?:https?:\/\/|www\.)\S+/i);
+  if(um){
+    const rå = um[0].replace(/[),.;:!?]+$/, '');
+    link = cleanUrl(rå);
+    s = (s.slice(0, um.index) + ' ' + s.slice(um.index + rå.length)).replace(/\s+/g, ' ').trim();
+    if(!s) return null;
+  }
+
   // Deltagare sist: "-TA" eller "-T A"
   let who = null;
   const wm = s.match(/[-–—]\s*([A-Za-zÅÄÖåäö]{1,6})\s*$/);
@@ -2836,7 +2848,7 @@ function parseAlbum(line){
   names = names.map(x => x.replace(/[,;|]/g, ' ').replace(/\s+/g, ' ').trim()).filter(Boolean);
   title = title.replace(/[,;|]/g, ' ').replace(/\s+/g, ' ').trim() || names[0] || rest;
 
-  return { line: String(line).trim(), title, names, who,
+  return { line: String(line).trim(), title, names, who, link,
            start, end, yearOnly, hasDate: !!used && !yearOnly };
 }
 
@@ -2867,6 +2879,7 @@ function renderImport(){
       <div class="field"><textarea id="imText" spellcheck="false" placeholder="Wroclaw 1-4 juni 2023
 Kalifornien (San Diego, Los Angeles) 12-27 jun 2025
 Hamburg 1-3 maj 2026 -TA
+Rom 1-9 aug 2026 https://photos.app.goo.gl/abc
 Sommar i Grekland juli 2022"></textarea></div>
       <div class="imhelp">
         <p><b>Datum</b> läses var som helst i namnet:<br>
@@ -2883,6 +2896,9 @@ Sommar i Grekland juli 2022"></textarea></div>
             family().slice(0, 1).map(p => esc(p.name)).join('')} och ${
             family().slice(2, 3).map(p => esc(p.name)).join('') || 'Aron'}.
           Utan suffix räknas hela familjen.</p>
+        <p><b>En länk</b> får stå var som helst på raden och följer med resan:<br>
+          <code>Rom 1-9 aug 2026 https://photos.app.goo.gl/…</code><br>
+          Adressen plockas bort innan resten läses, så den stör inte datum eller ortnamn.</p>
         <p>Rader utan datum går också bra – de hamnar längst ned och får datum du fyller i själv.</p>
       </div>`;
     return;
@@ -2899,7 +2915,8 @@ Sommar i Grekland juli 2022"></textarea></div>
         <span>
           <span class="who">${r.places.length ? flagOf(r.iso) + ' ' : ''}${esc(r.title || r.line)}${
             r.yearOnly ? '<span class="imbadge warn">bara år</span>' : ''}${
-            !r.hasDate && !r.yearOnly ? '<span class="imbadge warn">inget datum</span>' : ''}</span>
+            !r.hasDate && !r.yearOnly ? '<span class="imbadge warn">inget datum</span>' : ''}${
+            r.link ? `<span class="imbadge">${esc(linkName(r.link))}</span>` : ''}</span>
           <span class="src">${esc(r.line)}</span>
           <span class="meta2">${r.pending ? 'slår upp …'
             : r.places.length
@@ -2952,6 +2969,7 @@ document.getElementById('imNext').onclick = async () => {
       who: r.who && r.who.length ? r.who : family().map(p => p.id),
       planned: r.start > today,
       note: '',
+      link: r.link || '',
       stops: [{ iso: r.iso, places: r.places.map(p => ({ name: p.name, lat: p.lat, lon: p.lon, what: '' })) }]
     });
   });
