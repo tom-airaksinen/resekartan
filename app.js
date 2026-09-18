@@ -13,8 +13,8 @@ const AUTH = {
   // Skriv aldrig själva lösenordet i koden – repot är publikt.
   hash: '5805d07268265f31365760d2aa2a450e97629e0d6a43c36829b54b3d971026c7'
 };
-const LS_KEY = 'resekartan.data', LS_AUTH = 'resekartan.unlocked', LS_SEEN = 'resekartan.inloggad';
-const APP_VERSION = 'v29';   // följ sw.js CACHE, så man ser vad som faktiskt körs
+const LS_KEY = 'resekartan.data', LS_AUTH = 'resekartan.unlocked', LS_SEEN = 'resekartan.inloggad', LS_LEGEND = 'resekartan.legend';
+const APP_VERSION = 'v30';   // följ sw.js CACHE, så man ser vad som faktiskt körs
 
 /* ============================ Tema ============================
    Temat är per enhet och ligger i localStorage, inte i DB – Hedvig ska kunna ha
@@ -1629,6 +1629,21 @@ function paintSearch(box){
 function markActive(box){
   box.querySelectorAll('.srch-res [role=option]').forEach((b, i) => b.setAttribute('aria-selected', String(i === box._act)));
 }
+/* Teckenförklaringen på telefonen: av som standard, och valet ligger kvar på
+   enheten. På desktop styr media-frågan i index.html och knappen finns inte. */
+const legendBtn = document.getElementById('legendBtn');
+function setLegend(on, save = true){
+  document.body.classList.toggle('visa-legend', on);
+  legendBtn?.setAttribute('aria-pressed', String(on));
+  legendBtn?.setAttribute('aria-label', on ? 'Dölj teckenförklaring' : 'Visa teckenförklaring');
+  if(save){ try { localStorage.setItem(LS_LEGEND, on ? '1' : '0'); } catch(e){} }
+}
+try { setLegend(localStorage.getItem(LS_LEGEND) === '1', false); } catch(e){ setLegend(false, false); }
+legendBtn?.addEventListener('click', e => {
+  e.stopPropagation();
+  setLegend(!document.body.classList.contains('visa-legend'));
+});
+
 const topEl = document.getElementById('top');
 function closeSearch(box){
   const input = box.querySelector('input');
@@ -2873,6 +2888,10 @@ function normaliseDB(){
 function start(){
   if(!CLOUD.on) DB = loadDB();
   normaliseDB();
+  // Kartan utgår från familjens gemensamma resor. Enskildas resor finns kvar
+  // ett tryck bort i väljaren, under Alla resor.
+  filter.clear();
+  family().forEach(p => filter.add(p.id));
   cloudDot(CLOUD.on ? 'on' : '', CLOUD.on ? 'Synkad med familjens data' : '');
   renderWho(); layout(); renderSheet(); renderViews();
   addEventListener('resize', layout);

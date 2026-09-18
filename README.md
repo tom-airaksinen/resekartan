@@ -168,11 +168,17 @@ färgskala inte får göra.
 Teckenförklaringen ankras ovanför bottenarket via `--sheet-h`, som `setSheet()`
 skriver. Innan dess låg den bakom arket och syntes aldrig på en telefon.
 
+På telefonen är den **av som standard** och fälls upp med infoknappen i toppraden;
+valet ligger kvar på enheten. Från 900 px och uppåt finns plats, och då ligger den
+framme hela tiden utan knapp.
+
 ### Alla resor är inte samma sak som hela familjen
 
 Resenärsväljaren har två lägen överst som är lätta att blanda ihop. **Alla resor**
 filtrerar inte alls. **Hela familjen** kryssar i alla fyra, och eftersom flera
 valda personer betyder *och* – inte *eller* – visas då bara resor där alla var med.
+Det är också utgångsläget vid varje start: kartan handlar om familjens gemensamma
+resor, och enskildas ligger ett tryck bort.
 
 Det stod tidigare bara "Alla" under rubriken "Visa resor där dessa var med", vilket
 lovade det ena och gjorde det andra: en resa där bara en av oss var med syntes ändå.
@@ -247,6 +253,12 @@ bara loggan och sedan kartan, i stället för tre rader text som avlöser varand
 
 Kortet står kvar när formuläret dyker upp, så startbilden växer till en
 inloggningsruta i stället för att bytas ut.
+
+### Nya inputtyper måste in i formulärregeln
+
+Fältstilarna räknas upp per typ (`input[type=text]`, `[type=email]`, …). Lägger man
+till en typ som inte står där får fältet webbläsarens egen stil och blir ett litet
+streck bland de andra. Det hände url-fältet för länken.
 
 ### Två CSS-fällor värda att minnas
 
