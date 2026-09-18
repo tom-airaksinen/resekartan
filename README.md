@@ -263,9 +263,11 @@ fyller allt utanför motivet med svart. Bakgrunden är därför en egen ljus him
 > Byter man ikonen behåller iOS den gamla på hemskärmen. Ta bort genvägen och
 > lägg till appen på nytt för att se den nya.
 
-Samma motiv ligger inlagt som SVG i låsskärmen i `index.html`. Det är med flit en
-kopia och inte `icon.svg`: en bild till hade blivit ännu en begäran innan sidan
-kan visa något. Ändrar man ikonen behöver båda ställena uppdateras.
+Samma motiv ligger också inlagt som SVG i `index.html`, i en `<symbol id="logga">`
+som används två gånger: stort på låsskärmen och litet i pillret uppe till vänster.
+Det är med flit en kopia av `icon.svg` och inte en bild: en begäran till hade
+fördröjt just det som ska synas först. Ändrar man ikonen behöver därför både
+`icon.svg` och symbolen i `index.html` uppdateras.
 
 ### Typsnitten får inte blinka in
 

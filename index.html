@@ -184,8 +184,10 @@ body.no-top #view-settings{padding-top:calc(12px + env(safe-area-inset-top,0px))
   padding-right:calc(16px + env(safe-area-inset-right,0px))}
 #top>*{pointer-events:auto}
 .toprow{display:flex;align-items:center;gap:10px}
-.brand{display:flex;align-items:center;gap:7px;background:var(--surface);padding:7px 12px 7px 14px;
+.brand{display:flex;align-items:center;gap:7px;background:var(--surface);padding:6px 12px 6px 7px;
   border-radius:999px;box-shadow:0 2px 10px rgba(0,0,0,.08);max-width:100%;min-width:0}
+.brandlogo{display:block;width:26px;height:26px;border-radius:8px;overflow:hidden;flex:none}
+.brandlogo svg{display:block;width:100%;height:100%}
 .brand h1{font-size:17px;font-weight:700;flex:none}
 .brand .dot{color:var(--ink-3);flex:none}
 .brand .sel{color:var(--ink-2);font-size:14px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
@@ -623,12 +625,13 @@ h2.sec:first-child{margin-top:8px}
 }
 </style>
 
-<div id="lock">
-  <div class="box">
-    <span class="logo" aria-hidden="true"><svg viewBox="0 0 100 100">
-      <defs><linearGradient id="lockSky" x1="0" y1="0" x2="0" y2="1">
-        <stop offset="0" stop-color="#D6E5EE"/><stop offset="1" stop-color="#B4CDDD"/></linearGradient></defs>
-      <rect width="100" height="100" fill="url(#lockSky)"/>
+<svg width="0" height="0" aria-hidden="true" style="position:absolute">
+  <defs>
+    <linearGradient id="loggaHimmel" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#D6E5EE"/><stop offset="1" stop-color="#B4CDDD"/>
+    </linearGradient>
+    <symbol id="logga" viewBox="0 0 100 100">
+      <rect width="100" height="100" fill="url(#loggaHimmel)"/>
       <g transform="translate(50 50) scale(.86) translate(-50 -52)">
         <path d="M50 92C50 92 20 62 20 42a30 30 0 0 1 60 0c0 20-30 50-30 50z" fill="#2B4F84"/>
         <circle cx="50" cy="42" r="19" fill="#FBFAF6"/>
@@ -636,7 +639,14 @@ h2.sec:first-child{margin-top:8px}
         <path d="M31 42h38M34.5 32h31M34.5 52h31" stroke="#2B4F84" stroke-width="2.4" stroke-linecap="round" fill="none"/>
         <circle cx="50" cy="42" r="19" fill="none" stroke="#2B4F84" stroke-width="2.6"/>
         <circle cx="57" cy="36" r="5.2" fill="#E4572E" stroke="#FBFAF6" stroke-width="2"/>
-      </g></svg></span>
+      </g>
+    </symbol>
+  </defs>
+</svg>
+
+<div id="lock">
+  <div class="box">
+    <span class="logo" aria-hidden="true"><svg viewBox="0 0 100 100"><use href="#logga"/></svg></span>
     <h1>Resekartan</h1>
     <p id="lockLead">Familjens resor.</p>
     <form id="lockForm" hidden>
@@ -670,6 +680,7 @@ h2.sec:first-child{margin-top:8px}
     <div id="top">
       <div class="toprow">
         <button class="brand" id="whoBtn" aria-expanded="false" aria-haspopup="true">
+          <span class="brandlogo" aria-hidden="true"><svg viewBox="0 0 100 100"><use href="#logga"/></svg></span>
           <h1>Resekartan</h1>
           <span class="dot">·</span>
           <span class="sel" id="whoLabel">Alla</span>
