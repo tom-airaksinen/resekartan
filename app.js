@@ -14,7 +14,7 @@ const AUTH = {
   hash: '5805d07268265f31365760d2aa2a450e97629e0d6a43c36829b54b3d971026c7'
 };
 const LS_KEY = 'resekartan.data', LS_AUTH = 'resekartan.unlocked', LS_SEEN = 'resekartan.inloggad';
-const APP_VERSION = 'v25';   // följ sw.js CACHE, så man ser vad som faktiskt körs
+const APP_VERSION = 'v26';   // följ sw.js CACHE, så man ser vad som faktiskt körs
 
 /* ============================ Tema ============================
    Temat är per enhet och ligger i localStorage, inte i DB – Hedvig ska kunna ha
@@ -821,15 +821,29 @@ function placeLabels(u){
     });
 }
 
+/* Fasta klassgränser, inte kvartiler: med så här små tal skulle en enda ny resa
+   annars färga om hela kartan och teckenförklaringen byta betydelse. 1 / 2–3 /
+   4+ står still och går att läsa rakt av. Tre steg räcker – fler nyanser går
+   ändå inte att skilja åt på en telefonskärm. */
+const heatNivå = n => n >= 4 ? ' v3' : n >= 2 ? ' v2' : ' v1';
+
 function paint(){
-  const v = new Set(), p = new Set();
-  visible().forEach(t => t.stops.forEach(s => {
-    if(!inFilter(t, s) || isHome(s.iso)) return;
-    (t.planned ? p : v).add(s.iso);
-  }));
-  p.forEach(i => { if(v.has(i)) p.delete(i); });
+  const antal = {}, p = new Set();
+  visible().forEach(t => {
+    const räknade = new Set();
+    t.stops.forEach(s => {
+      if(!inFilter(t, s) || isHome(s.iso)) return;
+      if(t.planned){ p.add(s.iso); return; }
+      if(räknade.has(s.iso)) return;      // ett land två gånger i samma resa är en resa
+      räknade.add(s.iso);
+      antal[s.iso] = (antal[s.iso] || 0) + 1;
+    });
+  });
+  Object.keys(antal).forEach(i => p.delete(i));
   d3.select('#countries').selectAll('path').attr('class', f =>
-    'land' + (isHome(f.id) ? ' home hit' : '') + (v.has(f.id) ? ' visited hit' : '') + (p.has(f.id) ? ' planned hit' : ''));
+    'land' + (isHome(f.id) ? ' home hit' : '')
+    + (antal[f.id] ? ' visited hit' + heatNivå(antal[f.id]) : '')
+    + (p.has(f.id) ? ' planned hit' : ''));
   d3.select('#pins').selectAll('g')
     .classed('active', q => q.t.id === sel).classed('dim', q => sel && q.t.id !== sel);
   rescale();
@@ -949,10 +963,17 @@ const SNAPS = [.26, .5, .72, .9];
 let sheetFrac = .5;
 
 function setSheet(frac, animate = true){
-  if(window.innerWidth >= 900) return;           // på desktop är arket en fast panel
+  const stage = document.getElementById('stage');
+  if(window.innerWidth >= 900){                  // på desktop är arket en fast panel
+    stage.style.setProperty('--sheet-h', '0px');
+    return;
+  }
   sheetFrac = Math.min(.92, Math.max(.16, frac));
   sheet.classList.toggle('dragging', !animate);
+  stage.classList.toggle('dragging', !animate);   // förklaringen ska följa fingret utan eftersläp
   sheet.style.height = (sheetFrac * 100) + '%';
+  // Teckenförklaringen låg annars bakom arket och syntes aldrig på telefonen
+  stage.style.setProperty('--sheet-h', (sheetFrac * 100) + '%');
 }
 const snapTo = frac => SNAPS.reduce((a, b) => Math.abs(b - frac) < Math.abs(a - frac) ? b : a);
 
@@ -1009,19 +1030,22 @@ function defaultFrac(){
    bild per resa vid varje start – i molnläge en nedladdning på några hundra kB
    styck – och att raderna nu ritas direkt, utan att vänta på lagringen.
    `thumbOf` är id:t kopian gjordes av, så den vet när omslaget bytts ut. */
-const THUMB_SIDE = 144;
+/* Liggande 4:3 – rutan i listan är liggande, och det är de flesta resebilder
+   också. THUMB_V räknas upp när formatet ändras, så omslag som redan ligger
+   sparade görs om nästa gång resan öppnas. */
+const THUMB_W = 240, THUMB_H = 180, THUMB_V = 2;
 
 function makeThumb(url){
   return new Promise(res => {
     const img = new Image();
     img.onload = () => {
-      // Beskär mitten till en kvadrat, som object-fit:cover gör i rutan
-      const s = THUMB_SIDE / Math.min(img.width, img.height);
+      // Beskär mitten, som object-fit:cover gör i rutan
+      const s = Math.max(THUMB_W / img.width, THUMB_H / img.height);
       const w = img.width * s, h = img.height * s;
       const cv = document.createElement('canvas');
-      cv.width = cv.height = THUMB_SIDE;
-      cv.getContext('2d').drawImage(img, (THUMB_SIDE - w) / 2, (THUMB_SIDE - h) / 2, w, h);
-      res(cv.toDataURL('image/jpeg', .62));
+      cv.width = THUMB_W; cv.height = THUMB_H;
+      cv.getContext('2d').drawImage(img, (THUMB_W - w) / 2, (THUMB_H - h) / 2, w, h);
+      res(cv.toDataURL('image/jpeg', .6));
     };
     img.onerror = () => res(null);
     img.src = url;
@@ -1058,12 +1082,12 @@ async function syncThumb(tripId, list){
   const hero = list[0];
   if(!hero){
     if(!t.thumb && !t.thumbOf) return;
-    delete t.thumb; delete t.thumbOf;
+    delete t.thumb; delete t.thumbOf; delete t.thumbV;
   } else {
-    if(t.thumbOf === hero.id && t.thumb) return;
+    if(t.thumbOf === hero.id && t.thumb && t.thumbV === THUMB_V) return;
     const url = await makeThumb(hero.prev || hero.url);
     if(!url) return;
-    t.thumb = url; t.thumbOf = hero.id;
+    t.thumb = url; t.thumbOf = hero.id; t.thumbV = THUMB_V;
   }
   saveDB();
   paintThumbRows(t);

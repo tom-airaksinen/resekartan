@@ -89,6 +89,14 @@ när ett galleri från före v19 öppnas första gången.
 
 ### Bilderna: förhandsbild och original
 
+Omslaget i listorna är liggande 4:3 (240 × 180 px, visas i 96 × 72). De flesta
+resebilder är liggande. `THUMB_V` räknas upp när formatet ändras, så omslag som
+redan ligger sparade görs om nästa gång resan öppnas.
+
+Rader utan bild får samma ruta med flaggan i, så vänsterkanten blir rak i en
+blandad lista. Landraderna i Länder rör vi inte – de har aldrig bilder, och
+väljs med `[data-trip]` i väljaren.
+
 Galleriet visar en förhandsbild på 400 px, inte originalet. Originalet på max
 1400 px hämtas först när man öppnar bilden i helskärm, och visaren målar upp
 förhandsbilden direkt medan den väntar. En resa med tjugo bilder laddar därmed
@@ -131,6 +139,27 @@ Tre fällor:
   en lös nod, och nästa flytt klistrar in den igen bredvid sin egen ersättare –
   samma bild syns två gånger fast räknaren säger rätt antal. Omritningen skjuts
   upp till draget släppts (`phDrag.pending`).
+
+### Färgskalan på kartan
+
+Besökta länder färgas efter hur många resor som gått dit: `--v1` för en resa,
+`--v2` för två till tre, `--v3` för fyra eller fler. Klassgränserna är **fasta,
+inte relativa**. Kvartiler eller Jenks-brytpunkter skulle färga om hela kartan
+varje gång en resa läggs till, och teckenförklaringen skulle byta betydelse utan
+att något egentligen ändrats. Med så här små tal går fasta gränser dessutom att
+läsa rakt av.
+
+Tre steg räcker. Fler nyanser går ändå inte att skilja åt i ett litet land på en
+telefonskärm, och familjen åker sällan till samma land mer än en handfull gånger.
+Stegen är jämna i ljushet, inte i mättnad, så skillnaden syns lika tydligt mellan
+varje par.
+
+Ytorna är **platta, inte gradienter**. En gradient gjorde att samma antal resor
+såg olika ut beroende på var på jorden landet låg, vilket är precis vad en
+färgskala inte får göra.
+
+Teckenförklaringen ankras ovanför bottenarket via `--sheet-h`, som `setSheet()`
+skriver. Innan dess låg den bakom arket och syntes aldrig på en telefon.
 
 ### Appikonen
 
