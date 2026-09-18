@@ -371,13 +371,21 @@ h2.sec:first-child{margin-top:8px}
 /* Inklistringsrutan är ett redigerbart fält, men ska varken visa markör eller
    se ut som ett textfält. Etiketten fångar inga tryck, så markören hamnar i
    rutan och systemets Klistra in-meny kommer fram på långtryck. */
-/* 16px är inte ett stilval: iOS zoomar in sidan när man fokuserar ett redigerbart
-   fält med mindre text än så. Etiketten sätter sin egen storlek. */
-.grid-ph .klistra{cursor:text;caret-color:transparent;font-size:16px;
+/* Etiketten ligger utanför fältet, inte i det. Ett redigerbart fält med bara
+   oredigerbart innehåll ger iOS ingenstans att sätta markören, och då erbjuds
+   ingen Klistra in-meny på långtryck.
+   16px är heller inget stilval: under det zoomar iOS in hela sidan vid fokus. */
+.grid-ph .klistrawrap{position:relative;aspect-ratio:1}
+.grid-ph .klistra{position:absolute;inset:0;border:1.5px dashed var(--line);border-radius:10px;
+  font-size:16px;color:transparent;caret-color:var(--accent);cursor:text;overflow:hidden;
   -webkit-user-select:text;user-select:text}
 .grid-ph .klistra:focus{outline:none;border-color:var(--accent);border-style:solid}
-.grid-ph .klistra .etikett{display:flex;flex-direction:column;align-items:center;gap:4px;
-  pointer-events:none;font-size:13px;font-weight:600;line-height:1.25}
+.grid-ph .klistra img{max-width:100%}
+.grid-ph .klistraetikett{position:absolute;inset:0;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;gap:4px;padding:6px;text-align:center;
+  pointer-events:none;color:var(--ink-2);font-size:13px;font-weight:600;line-height:1.25}
+.grid-ph .klistraetikett svg{width:20px;height:20px;stroke:currentColor;fill:none;
+  stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
 .ph-empty{padding:12px;border-radius:12px;border:1px dashed var(--line);color:var(--ink-3);font-size:13px}
 .ph-busy{font-size:13px;color:var(--ink-2);margin:8px 0 0;display:flex;align-items:center;gap:8px}
 

@@ -195,15 +195,18 @@ rutan.
 
 Tre detaljer till:
 
-- Etiketten ligger i ett eget `contenteditable="false"`, så markören aldrig hamnar
-  i den och texten inte går att redigera bort. Den ska heller inte bytas ut medan
-  rutan är fokuserad – att röra i det redigerbara innehållet mitt under en
-  inklistring får Safari att tappa bort sig.
-- `inputmode="none"` håller tangentbordet borta, och `caret-color: transparent`
-  döljer markören.
-- **`font-size: 16px` på rutan är inget stilval.** iOS zoomar in hela sidan när
-  man fokuserar ett redigerbart fält med mindre text än så. Etiketten sätter sin
-  egen storlek.
+- **Fältet måste se ut som något man skriver i, annars visar iOS ingen meny.**
+  Först låg etiketten inuti fältet som `contenteditable="false"`, och fältet hade
+  `inputmode="none"`. Då gav långtryck ingenting alls: inget att sätta markören i,
+  ingen Klistra in-meny. Nu ligger etiketten utanför fältet, fältet innehåller ett
+  osynligt tecken (`\u200B`) så markören har någonstans att stå, och inget
+  dämpar inmatningen.
+- Texten är genomskinlig men markören syns, så man ser att fältet är aktivt utan
+  att det osynliga tecknet eller inklistrad text blir synlig.
+- **`font-size: 16px` på fältet är inget stilval.** iOS zoomar in hela sidan när
+  man fokuserar ett redigerbart fält med mindre text än så.
+- Misslyckas en inklistring skrivs det i klartext under rutnätet vad webbläsaren
+  lämnade ut. Inklistring beter sig olika överallt och går inte att felsöka i blindo.
 
 `paste`-händelsen fungerar också var som helst i en öppen resa, vilket räcker på
 datorn. Den ignoreras när markören står i ett vanligt textfält.

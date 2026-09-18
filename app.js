@@ -14,7 +14,7 @@ const AUTH = {
   hash: '5805d07268265f31365760d2aa2a450e97629e0d6a43c36829b54b3d971026c7'
 };
 const LS_KEY = 'resekartan.data', LS_AUTH = 'resekartan.unlocked', LS_SEEN = 'resekartan.inloggad', LS_LEGEND = 'resekartan.legend';
-const APP_VERSION = 'v47';   // följ sw.js CACHE, så man ser vad som faktiskt körs
+const APP_VERSION = 'v48';   // följ sw.js CACHE, så man ser vad som faktiskt körs
 
 /* ============================ Tema ============================
    Temat är per enhet och ligger i localStorage, inte i DB – Hedvig ska kunna ha
@@ -1293,22 +1293,22 @@ let phCache = [], phTrip = null;
 const addTile = `<button type="button" class="addph" id="phAdd">
   <svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="15" rx="2.5"/><path d="M3 16l5-5 4 4 3-3 6 6M12 2v6M9 5h6"/></svg>
   Lägg till</button>`;
-/* Rutan är contenteditable, inte en knapp, och det är hela poängen. Safari på
-   iPhone låter `navigator.clipboard.read()` lyckas ibland och svara tomt ibland,
-   utan att fråga. Men ett riktigt inklistringsfält får alltid systemets
-   Klistra in-meny på långtryck, och då kommer bilden fram.
-
-   Etiketten ligger i ett eget contenteditable="false", så markören aldrig hamnar
-   i den. inputmode="none" håller tangentbordet borta. */
 const kanKlistra = () => true;
-const pasteLabel = `<span class="etikett" contenteditable="false">
+/* Rutan är ett helt vanligt redigerbart fält, utan något som dämpar det.
+   inputmode="none" och en etikett inuti provades först, och då vägrade iOS visa
+   sin Klistra in-meny på långtryck – fältet såg inte ut som något man skriver i.
+   Nu ligger etiketten utanför fältet, och fältet innehåller ett osynligt tecken
+   så markören har någonstans att stå. */
+const ZWSP = '\u200B';
+const pasteLabel = `<span class="klistraetikett" aria-hidden="true">
   <svg viewBox="0 0 24 24"><path d="M9 4H7a2 2 0 00-2 2v13a2 2 0 002 2h10a2 2 0 002-2V6a2 2 0 00-2-2h-2"/><rect x="9" y="2.5" width="6" height="3.5" rx="1.2"/></svg>
   Klistra in</span>`;
-const pasteTile = `<div class="addph klistra" id="phPaste" contenteditable="true" inputmode="none"
-  role="button" tabindex="0" aria-label="Klistra in en bild">${pasteLabel}</div>`;
+const pasteTile = `<div class="klistrawrap">
+  <div class="klistra" id="phPaste" contenteditable="true" role="textbox"
+       aria-label="Klistra in en bild">${ZWSP}</div>${pasteLabel}</div>`;
 const aterstallPasteTile = () => {
   const el = document.getElementById('phPaste');
-  if(el){ el.innerHTML = pasteLabel; el.blur(); }
+  if(el) el.textContent = ZWSP;
 };
 
 function renderPhotos(){
@@ -1531,10 +1531,9 @@ function visaUrklipp(txt){
   if(txt) h.insertAdjacentHTML('beforeend',
     `<br><span class="urklipp" style="color:var(--danger)">${esc(txt)}</span>`);
 }
-// Vad som blev kvar i rutan, utan etiketten och utan råmarkup
+// Vad som blev kvar i rutan, utan det osynliga tecknet och utan råmarkup
 const rutansInnehall = el => [...el.childNodes]
-  .filter(n => !(n.nodeType === 1 && n.classList?.contains('etikett')))
-  .map(n => n.nodeType === 1 ? `<${n.nodeName.toLowerCase()}>` : n.textContent.trim())
+  .map(n => n.nodeType === 1 ? `<${n.nodeName.toLowerCase()}>` : n.textContent.replaceAll(ZWSP, '').trim())
   .filter(Boolean).join(' ').slice(0, 60);
 
 /* På pekskärm hoppar vi över clipboard.read(). Safari visar då en egen
