@@ -14,7 +14,7 @@ const AUTH = {
   hash: '5805d07268265f31365760d2aa2a450e97629e0d6a43c36829b54b3d971026c7'
 };
 const LS_KEY = 'resekartan.data', LS_AUTH = 'resekartan.unlocked', LS_SEEN = 'resekartan.inloggad', LS_LEGEND = 'resekartan.legend';
-const APP_VERSION = 'v40';   // följ sw.js CACHE, så man ser vad som faktiskt körs
+const APP_VERSION = 'v41';   // följ sw.js CACHE, så man ser vad som faktiskt körs
 
 /* ============================ Tema ============================
    Temat är per enhet och ligger i localStorage, inte i DB – Hedvig ska kunna ha
@@ -969,13 +969,38 @@ function resetZoom(){ ease(svg).call(zoom.transform, d3.zoomIdentity); }
    på kartan, och då är reselistan det man vill tillbaka till – inte kartans ark.
    Ingen tidig retur här: ett tryck ska alltid rita om, annars kan knappen kännas
    död i lägen där sel råkat nollställas på annat håll. */
-let backTab = 'karta';
+/* Arket har en egen historik. Söker man fram ett land, öppnar en av dess resor
+   och trycker tillbaka ska man hamna i landet igen – inte i ingenting. Varje
+   bildruta minns vad som var öppet och vilken flik man kom från, så vägen
+   tillbaka går hela sträckan: resa → land → fliken Länder. */
+const nav = [];
+const navLika = (a, b) => a.sel === b.sel && a.selCountry === b.selCountry && a.tab === b.tab;
+
+function navPush(){
+  const ruta = { sel, selCountry, tab };
+  if(nav.length && navLika(nav.at(-1), ruta)) return;
+  nav.push(ruta);
+  if(nav.length > 20) nav.shift();       // ingen anledning att minnas längre bak
+}
+
+/* Ett steg bakåt. Är historiken tom är grundvyn det enda rimliga. */
+function goBack(){
+  const f = nav.pop();
+  if(!f) return clearSel();
+  sel = f.sel; selCountry = f.selCountry;
+  drawPins(); renderSheet();
+  if(f.selCountry) flyToCountry(f.selCountry);
+  else if(f.sel){ const t = DB.trips.find(x => x.id === f.sel); if(t) flyTo(t); else resetZoom(); }
+  else resetZoom();
+  if(f.tab !== tab) setTab(f.tab);
+}
+
+/* Hela vägen ut till grundvyn: används av ett andra tryck på Kartfliken, av ett
+   klick på kartan och när filtret ändras. */
 function clearSel(){
-  const till = backTab;
-  backTab = 'karta';
+  nav.length = 0;
   sel = null; selCountry = null;
   drawPins(); renderSheet(); resetZoom();
-  if(till !== 'karta' && till !== tab) setTab(till);
 }
 svg.on('click', () => { if(!pickTarget) clearSel(); });
 // Samma rörelseinställning som resten av kartan
@@ -1027,6 +1052,7 @@ whoMenu.addEventListener('click', e => {
   else if(id === '*'){ filter.clear(); family().forEach(p => filter.add(p.id)); }
   else if(filter.has(id)) filter.delete(id);
   else filter.add(id);
+  nav.length = 0;                       // historiken hör till det gamla urvalet
   sel = null; selCountry = null;
   renderWho(); drawPins(); renderSheet(); renderViews();
   if(tab === 'karta') resetZoom();      // rör inte kartan när man står i en annan flik
@@ -1662,23 +1688,24 @@ function renderCountry(iso){
 document.addEventListener('click', e => {
   const tr = e.target.closest('[data-trip]');
   if(tr){ showTrip(tr.dataset.trip); return; }
-  if(e.target.closest('[data-back]')){ clearSel(); return; }
+  if(e.target.closest('[data-back]')){ goBack(); return; }
   const ed = e.target.closest('[data-edit]');
   if(ed){ openEditor(ed.dataset.edit); return; }
   const del = e.target.closest('[data-del]');
   if(del){ removeTrip(del.dataset.del); return; }
   const co = e.target.closest('[data-country]');
-  if(co){ setTab('karta'); showCountry(co.dataset.country); }
+  if(co){ showCountry(co.dataset.country); }
 });
 
 function showTrip(id){
   const t = DB.trips.find(x => x.id === id);
-  if(!t) return;
-  backTab = tab;
+  if(!t || sel === id) return;
+  navPush();
   sel = id; selCountry = null; setTab('karta'); drawPins(); renderSheet(); flyTo(t);
 }
 function showCountry(iso){
-  backTab = tab;
+  if(selCountry === iso && !sel) return;
+  navPush();
   selCountry = iso; sel = null; setTab('karta'); drawPins(); renderSheet(); flyToCountry(iso);
 }
 async function removeTrip(id){
@@ -1686,6 +1713,7 @@ async function removeTrip(id){
   if(!t) return;
   if(!await ask(`Ta bort resan "${t.title}"? Det går inte att ångra.`, 'Ta bort')) return;
   DB.trips = DB.trips.filter(x => x.id !== id);
+  for(let i = nav.length - 1; i >= 0; i--) if(nav[i].sel === id) nav.splice(i, 1);
   saveDB(); sel = null;
   if(!editor.hidden) closeEditor();
   refreshAll();
@@ -2166,7 +2194,7 @@ document.getElementById('tabs').addEventListener('click', e => {
     if(t === 'karta'){
       // Kartan har tre saker som kan ha flyttat sig: det som är öppet, kartans
       // zoom och arkets läge och skrollning. Alla tre ska tillbaka.
-      if(sel || selCountry){ backTab = 'karta'; clearSel(); }
+      if(sel || selCountry){ clearSel(); }
       else {
         resetZoom();
         setSheet(.5);

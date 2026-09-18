@@ -263,13 +263,29 @@ På desktop står sökfältet framme hela tiden i stället för att slås på me
 förstoringsglas: där finns plats, och då behövs varken knappen eller Avbryt.
 `#top` slutar också före panelen, så ingenting i toppraden kan nå in under den.
 
-### Tillbaka landar där man kom ifrån
+### Arket har en egen historik
 
-`backTab` minns vilken flik resan öppnades från. Öppnar man en resa ur Resor
-hamnar man på kartan, och då är reselistan det man vill tillbaka till – inte
-kartans ark. `clearSel()` har medvetet ingen tidig retur: ett tryck ska alltid
-rita om, annars kan knappen kännas död i lägen där `sel` nollställts på annat
-håll.
+`nav` är en stack av bildrutor: `{ sel, selCountry, tab }`. `showTrip()` och
+`showCountry()` lägger på det som var öppet innan, och `goBack()` plockar av en
+ruta i taget. Vägen tillbaka går därför hela sträckan:
+
+```
+Länder → Ungern → Budapest 2019 → tillbaka → Ungern → tillbaka → Länder
+```
+
+Förut nollställdes allt vid ett tryck på Tillbaka, så man tappade landet med dess
+övriga resor och fick leta upp det igen.
+
+Tre saker tömmer stacken helt, för då hör den gamla vägen inte längre ihop med det
+man ser: ett andra tryck på Kartfliken, ett klick på kartan, och att filtret ändras.
+En borttagen resa rensas ur stacken så Tillbaka inte leder till något som inte finns.
+
+`clearSel()` har medvetet ingen tidig retur: ett tryck ska alltid rita om, annars
+kan knappen kännas död i lägen där `sel` nollställts på annat håll.
+
+Fällan att minnas: `showCountry()` byter flik själv. Anropar man `setTab('karta')`
+före den hamnar fel flik i historiken, och Tillbaka leder till kartan i stället för
+till Länder.
 
 ### Appikonen
 
