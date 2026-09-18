@@ -14,7 +14,7 @@ const AUTH = {
   hash: '5805d07268265f31365760d2aa2a450e97629e0d6a43c36829b54b3d971026c7'
 };
 const LS_KEY = 'resekartan.data', LS_AUTH = 'resekartan.unlocked', LS_SEEN = 'resekartan.inloggad', LS_LEGEND = 'resekartan.legend';
-const APP_VERSION = 'v48';   // följ sw.js CACHE, så man ser vad som faktiskt körs
+const APP_VERSION = 'v49';   // följ sw.js CACHE, så man ser vad som faktiskt körs
 
 /* ============================ Tema ============================
    Temat är per enhet och ligger i localStorage, inte i DB – Hedvig ska kunna ha
@@ -1329,7 +1329,7 @@ function renderPhotos(){
     <p class="hint">${phCache.length > 1
       ? 'Håll på en bild och dra för att flytta den. Den första bilden är omslaget och visas i reselistorna. '
       : phCache.length ? '' : 'Lägg till några favoriter från resan. Bilderna krymps innan de sparas, så de tar liten plats. '}
-      Klistra in: tryck på rutan, håll sedan ner i den och välj Klistra in.${
+      Klistra in: tryck på rutan och sedan på Klistra in när den frågar. Kommer ingen fråga, håll ner i rutan och välj Klistra in i menyn. Går inte det heller: spara bilden till Bilder och använd Lägg till.${
         urklippsInfo ? `<br><span class="urklipp" style="color:var(--danger)">${esc(urklippsInfo)}</span>` : ''}</p>`;
 }
 
@@ -1536,15 +1536,14 @@ const rutansInnehall = el => [...el.childNodes]
   .map(n => n.nodeType === 1 ? `<${n.nodeName.toLowerCase()}>` : n.textContent.replaceAll(ZWSP, '').trim())
   .filter(Boolean).join(' ').slice(0, 60);
 
-/* På pekskärm hoppar vi över clipboard.read(). Safari visar då en egen
-   Paste-bubbla som ändå inte lämnar ut bilder från andra appar, och man får två
-   dialoger efter varandra utan att något händer. Långtryck i rutan är vägen. */
-const harPekdon = () => matchMedia('(hover: none)').matches;
-
+/* clipboard.read() körs på alla enheter, även pekskärm. Det var så det fungerade
+   i v43: ett tryck på rutan, Safari visar sin Paste-bubbla, ett tryck på den och
+   bilden kommer. I v47 stängde jag av det på pekskärm utifrån en felaktig teori,
+   och tog därmed bort den enda väg som någonsin fungerat på iPhone. Långtryck i
+   fältet finns kvar som andra väg, men den är inte huvudvägen. */
 async function klistraIn(){
   if(!galleriOppet()) return;
   const el = document.getElementById('phPaste');
-  if(harPekdon()){ el?.focus(); return; }
   const filer = [], spar = [];
   try {
     for(const post of await (navigator.clipboard?.read?.() ?? [])){

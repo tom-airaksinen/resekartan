@@ -173,22 +173,30 @@ Galleriet tar emot bilder ur urklipp, inte bara ur filväljaren. Det är till f�
 bilder som finns i ett delat album men inte på telefonen: kopiera där, klistra in
 här, i stället för att spara ner till kamerarullen först.
 
-**Rutan i rutnätet är `contenteditable`, inte en knapp, och det är hela poängen.**
-`navigator.clipboard.read()` provades först och räckte inte: Safari på iPhone
-svarade tomt utan att ens fråga när bilden kom från en annan app. Ett riktigt
-inklistringsfält får däremot alltid systemets Klistra in-meny på långtryck.
+**Huvudvägen på iPhone är `navigator.clipboard.read()`, och den måste köras
+på pekskärm.** Ett tryck på rutan får Safari att visa sin Paste-bubbla; ett tryck
+på den, och bilden kommer. Det var så det fungerade i v43. I v47 stängdes
+anropet av på pekskärm utifrån en felaktig teori om att Safari aldrig lämnar ut
+bilder den vägen, och därmed försvann den enda väg som någonsin fungerat på
+telefonen. Läxan: **ändra inte det som fungerar utan att först ha diffat mot den
+version som fungerade.**
 
-**Bilden kan komma in på fyra sätt, och Safari väljer inte samma som andra.**
-Alla fyra hanteras, annars fungerar det på datorn men inte på telefonen:
+`read()` lämnar dock inte ut alla urklipp. Vad den svarar i klartext skrivs under
+rutnätet när den inte ger någon bild (`läsning gav …`), så nästa gång det händer
+finns ett svar i stället för en gissning.
+
+**Rutan är `contenteditable`**, inte en knapp, för att långtryck ska ge systemets
+Klistra in-meny som andra väg. Bilden kan då komma in på tre sätt, och Safari
+väljer inte samma som andra:
 
 | Väg | Var |
 | --- | --- |
+| `clipboard.read()` | huvudvägen på iPhone och där Safari tillåter det |
 | `clipboardData.files` | datorn, Android |
 | `text/html` med en `<img src>` | Safari lämnar ibland bara ut en adress |
 | en `<img>` som webbläsaren själv lägger i rutan | Safari, bilder från andra appar |
-| `clipboard.read()` | när webbläsaren tillåter det, ett tryck räcker |
 
-Den tredje är den viktiga och den minst uppenbara: **gör man `preventDefault()` på
+Den sista är den minst uppenbara: **gör man `preventDefault()` på
 inklistringen i rutan hinner Safari aldrig lägga dit bilden**, och då finns inget
 att plocka upp. Därför låter vi den klistra in, läser ut bilden efteråt och städar
 rutan.
