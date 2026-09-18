@@ -14,7 +14,7 @@ const AUTH = {
   hash: '5805d07268265f31365760d2aa2a450e97629e0d6a43c36829b54b3d971026c7'
 };
 const LS_KEY = 'resekartan.data', LS_AUTH = 'resekartan.unlocked', LS_SEEN = 'resekartan.inloggad', LS_LEGEND = 'resekartan.legend';
-const APP_VERSION = 'v30';   // följ sw.js CACHE, så man ser vad som faktiskt körs
+const APP_VERSION = 'v31';   // följ sw.js CACHE, så man ser vad som faktiskt körs
 
 /* ============================ Tema ============================
    Temat är per enhet och ligger i localStorage, inte i DB – Hedvig ska kunna ha
@@ -1264,9 +1264,7 @@ function renderPhotos(){
   box.innerHTML = `<div class="grid-ph" id="phGrid">${phCache.map((p, i) =>
     `<figure data-id="${esc(p.id)}"${i === 0 ? ' class="hero"' : ''}>
       <img src="${p.prev || p.url}" alt="Bild ${i + 1} från resan" loading="lazy" data-open="${i}" draggable="false">
-      <span class="cover">Omslag</span>
-      <button type="button" class="rm" data-rm="${esc(p.id)}" aria-label="Ta bort bilden">
-        <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></figure>`).join('')}${addTile}</div>
+      <span class="cover">Omslag</span></figure>`).join('')}${addTile}</div>
     ${phCache.length
       ? (phCache.length > 1 ? '<p class="hint">Håll på en bild och dra för att flytta den. Den första bilden är omslaget och visas i reselistorna.</p>' : '')
       : '<p class="hint">Lägg till några favoriter från resan. Bilderna krymps innan de sparas, så de tar liten plats.</p>'}`;
@@ -1337,7 +1335,7 @@ async function phDragEnd(){
 document.addEventListener('contextmenu', e => { if(e.target.closest?.('#phGrid figure')) e.preventDefault(); });
 document.addEventListener('pointerdown', e => {
   const fig = e.target.closest?.('#phGrid figure');
-  if(!fig || e.button > 0 || e.target.closest('.rm')) return;
+  if(!fig || e.button > 0) return;
   phDragReset();
   phDrag.fig = fig; phDrag.pid = e.pointerId; phDrag.x0 = e.clientX; phDrag.y0 = e.clientY;
   if(e.pointerType === 'mouse') phDrag.armed = true;
@@ -1407,8 +1405,6 @@ document.addEventListener('click', e => {
   }
   const open = e.target.closest('[data-open]');
   if(open){ if(Date.now() - phDrag.endedAt > 300) openViewer(+open.dataset.open); return; }
-  const rm = e.target.closest('[data-rm]');
-  if(rm){ removePhoto(rm.dataset.rm); return; }
 });
 
 phInput.addEventListener('change', async () => {
@@ -1469,25 +1465,68 @@ async function loadFull(p){
   if(url) fullCache.set(p.id, url);
   return url;
 }
+/* ---- Bläddring med glid ----
+   Spåret håller tre rutor: föregående, den man tittar på, och nästa. Att byta
+   bild flyttar spåret en rutbredd åt sidan; när glidningen är klar ritas rutorna
+   om med den nya bilden i mitten och spåret nollställs utan övergång. Fler än tre
+   rutor vore bara fler avkodade bilder i minnet utan att synas. */
+const vTrack = () => document.getElementById('vTrack');
+let slideBusy = false, vDrag = null;
+
+const fullEllerPrev = p => p.url || fullCache.get(p.id) || p.prev || '';
+
+function viewerSlides(){
+  const track = vTrack();
+  track.innerHTML = [vIdx - 1, vIdx, vIdx + 1].map(i => {
+    const p = phCache[i];
+    return p
+      ? `<div class="vslide"><img src="${fullEllerPrev(p)}" alt="Bild ${i + 1} från resan"></div>`
+      : '<div class="vslide"></div>';
+  }).join('');
+  // Nollställ mitten utan att det glider tillbaka synligt
+  track.classList.add('dragging');
+  track.style.transform = 'translateX(-100%)';
+  void track.offsetWidth;
+  track.classList.remove('dragging');
+}
+
 function paintViewer(){
   const p = phCache[vIdx];
   if(!p) return closeViewer();
-  const img = document.getElementById('vImg'), cnt = document.getElementById('vCount');
+  viewerSlides();
+  const cnt = document.getElementById('vCount');
   const nr = `${vIdx + 1} / ${phCache.length}`;
-  img.src = p.prev || p.url || '';
-  cnt.textContent = p.url ? nr : `${nr} · laddar …`;
+  const klar = !!p.url || fullCache.has(p.id);
+  cnt.textContent = klar ? nr : `${nr} · laddar …`;
   document.getElementById('vPrev').disabled = vIdx === 0;
   document.getElementById('vNext').disabled = vIdx >= phCache.length - 1;
-  if(p.url) return;
+  if(klar){ loadFull(phCache[vIdx + 1]); return; }
   loadFull(p).then(url => {
     // Användaren kan ha bläddrat vidare under tiden
     if(viewerEl.hidden || phCache[vIdx]?.id !== p.id) return;
-    if(url) img.src = url;
+    const img = vTrack().children[1]?.querySelector('img');
+    if(url && img) img.src = url;
     cnt.textContent = url ? nr : `${nr} · kunde inte hämta bilden`;
     loadFull(phCache[vIdx + 1]);        // nästa i förväg, så bläddringen känns direkt
   });
 }
-const step = d => { vIdx = Math.min(phCache.length - 1, Math.max(0, vIdx + d)); paintViewer(); };
+function step(d){
+  const n = vIdx + d;
+  if(slideBusy || n < 0 || n >= phCache.length) return;
+  if(calm.matches){ vIdx = n; paintViewer(); return; }   // utan rörelse: byt rakt av
+  const track = vTrack();
+  slideBusy = true;
+  track.style.transform = `translateX(${-100 - d * 100}%)`;
+  let gjort = false;
+  const done = () => {
+    if(gjort) return;
+    gjort = true;
+    track.removeEventListener('transitionend', done);
+    vIdx = n; slideBusy = false; paintViewer();
+  };
+  track.addEventListener('transitionend', done);
+  setTimeout(done, 450);        // nödutgång om transitionend uteblir
+}
 document.getElementById('vClose').onclick = closeViewer;
 document.getElementById('vPrev').onclick = () => step(-1);
 document.getElementById('vNext').onclick = () => step(1);
@@ -1498,14 +1537,38 @@ addEventListener('keydown', e => {
   if(e.key === 'ArrowLeft') step(-1);
   if(e.key === 'ArrowRight') step(1);
 });
-// Svep i sidled
-let vx = null;
-viewerEl.addEventListener('pointerdown', e => { vx = e.clientX; });
-viewerEl.addEventListener('pointerup', e => {
-  if(vx === null) return;
-  const dx = e.clientX - vx; vx = null;
-  if(Math.abs(dx) > 50) step(dx < 0 ? 1 : -1);
+/* Svep i sidled: bilden följer fingret, och i ändarna tar den emot i stället för
+   att glida ut i tomma intet. */
+viewerEl.addEventListener('pointerdown', e => {
+  if(slideBusy || e.target.closest('.vbtn')) return;
+  vDrag = { x: e.clientX, w: viewerEl.clientWidth || 1, dx: 0, rör: false };
 });
+viewerEl.addEventListener('pointermove', e => {
+  if(!vDrag) return;
+  const dx = e.clientX - vDrag.x;
+  if(!vDrag.rör){
+    if(Math.abs(dx) < 6) return;
+    vDrag.rör = true;
+    vTrack().classList.add('dragging');
+  }
+  const kant = (dx > 0 && vIdx === 0) || (dx < 0 && vIdx >= phCache.length - 1);
+  vDrag.dx = kant ? dx / 3 : dx;
+  vTrack().style.transform = `translateX(calc(-100% + ${vDrag.dx}px))`;
+});
+function slutSvep(){
+  if(!vDrag) return;
+  const { dx, w, rör } = vDrag;
+  vDrag = null;
+  const track = vTrack();
+  track.classList.remove('dragging');
+  if(!rör) return;
+  const tröskel = Math.max(48, w * .18);
+  const d = dx <= -tröskel ? 1 : dx >= tröskel ? -1 : 0;
+  if(d && vIdx + d >= 0 && vIdx + d < phCache.length) step(d);
+  else track.style.transform = 'translateX(-100%)';
+}
+viewerEl.addEventListener('pointerup', slutSvep);
+viewerEl.addEventListener('pointercancel', slutSvep);
 
 function renderCountry(iso){
   sheet.classList.add('country'); sheet.classList.remove('detail');

@@ -120,6 +120,24 @@ automatiskt, en i taget i bakgrunden, när resan öppnas. Originalet skrivs allt
 före posten som pekar på det, så ett avbrutet nät aldrig lämnar en bildruta utan
 bild bakom.
 
+### Bildvisaren glider
+
+Spåret i helskärmsläget håller tre rutor: föregående, den man tittar på, och
+nästa. Att byta bild flyttar spåret en rutbredd åt sidan; när glidningen är klar
+ritas rutorna om med den nya bilden i mitten och spåret nollställs utan övergång.
+Fler än tre rutor vore bara fler avkodade bilder i minnet utan att synas.
+
+Svepet låter bilden följa fingret, och i ändarna dämpas dragningen till en
+tredjedel så den tar emot i stället för att glida ut i tomma intet. `touch-action:
+pan-y` på ytan hindrar webbläsaren från att tolka svepet som sitt eget bakåtsvep.
+
+`transitionend` är inte att lita på ensamt – en dold flik eller ett avbrutet
+skede kan svälja den, så en timeout på 450 ms städar upp. Med `prefers-reduced-motion`
+byts bilden rakt av utan glid.
+
+**Att ta bort en bild sker bara i helskärmsläget.** Kryssen i rutnätet togs bort:
+man raderar sällan, och de gjorde att man inte vågade trycka på bilderna.
+
 ### Dra för att ändra ordning
 
 HTML5:s drag and drop finns inte på touch, så galleriet använder pointer-händelser
