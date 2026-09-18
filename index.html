@@ -368,6 +368,12 @@ h2.sec:first-child{margin-top:8px}
 .addph{display:flex;align-items:center;justify-content:center;gap:7px;aspect-ratio:1;border-radius:10px;
   border:1.5px dashed var(--line);color:var(--ink-2);font-size:13px;font-weight:600;flex-direction:column;text-align:center;padding:6px}
 .addph svg{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+/* Inklistringsrutan är ett redigerbart fält, men ska varken visa markör eller
+   se ut som ett textfält. Etiketten fångar inga tryck, så markören hamnar i
+   rutan och systemets Klistra in-meny kommer fram på långtryck. */
+.grid-ph .klistra{cursor:text;caret-color:transparent;-webkit-user-select:text;user-select:text}
+.grid-ph .klistra:focus{outline:none;border-color:var(--accent);color:var(--accent)}
+.grid-ph .klistra .etikett{display:flex;flex-direction:column;align-items:center;gap:4px;pointer-events:none}
 .ph-empty{padding:12px;border-radius:12px;border:1px dashed var(--line);color:var(--ink-3);font-size:13px}
 .ph-busy{font-size:13px;color:var(--ink-2);margin:8px 0 0;display:flex;align-items:center;gap:8px}
 

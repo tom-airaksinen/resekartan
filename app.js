@@ -14,7 +14,7 @@ const AUTH = {
   hash: '5805d07268265f31365760d2aa2a450e97629e0d6a43c36829b54b3d971026c7'
 };
 const LS_KEY = 'resekartan.data', LS_AUTH = 'resekartan.unlocked', LS_SEEN = 'resekartan.inloggad', LS_LEGEND = 'resekartan.legend';
-const APP_VERSION = 'v42';   // följ sw.js CACHE, så man ser vad som faktiskt körs
+const APP_VERSION = 'v43';   // följ sw.js CACHE, så man ser vad som faktiskt körs
 
 /* ============================ Tema ============================
    Temat är per enhet och ligger i localStorage, inte i DB – Hedvig ska kunna ha
@@ -1289,12 +1289,23 @@ let phCache = [], phTrip = null;
 const addTile = `<button type="button" class="addph" id="phAdd">
   <svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="15" rx="2.5"/><path d="M3 16l5-5 4 4 3-3 6 6M12 2v6M9 5h6"/></svg>
   Lägg till</button>`;
-/* På datorn räcker cmd-V, men iOS släpper bara fram urklippet efter ett tryck
-   och en egen bekräftelse. Därför en ruta att trycka på också. */
-const kanKlistra = () => !!navigator.clipboard?.read;
-const pasteTile = `<button type="button" class="addph" id="phPaste">
+/* Rutan är contenteditable, inte en knapp, och det är hela poängen. Safari på
+   iPhone låter `navigator.clipboard.read()` lyckas ibland och svara tomt ibland,
+   utan att fråga. Men ett riktigt inklistringsfält får alltid systemets
+   Klistra in-meny på långtryck, och då kommer bilden fram.
+
+   Etiketten ligger i ett eget contenteditable="false", så markören aldrig hamnar
+   i den. inputmode="none" håller tangentbordet borta. */
+const kanKlistra = () => true;
+const pasteLabel = `<span class="etikett" contenteditable="false">
   <svg viewBox="0 0 24 24"><path d="M9 4H7a2 2 0 00-2 2v13a2 2 0 002 2h10a2 2 0 002-2V6a2 2 0 00-2-2h-2"/><rect x="9" y="2.5" width="6" height="3.5" rx="1.2"/></svg>
-  Klistra in</button>`;
+  Klistra in</span>`;
+const pasteTile = `<div class="addph klistra" id="phPaste" contenteditable="true" inputmode="none"
+  role="button" tabindex="0" aria-label="Klistra in en bild">${pasteLabel}</div>`;
+const aterstallPasteTile = () => {
+  const el = document.getElementById('phPaste');
+  if(el){ el.innerHTML = pasteLabel; el.blur(); }
+};
 
 function renderPhotos(){
   const box = document.getElementById('phBody');
@@ -1489,31 +1500,37 @@ async function laggTillBilder(valda){
 const galleriOppet = () => !!phTrip && !!document.getElementById('phBody')
   && editor.hidden && importer.hidden && viewerEl.hidden;
 
+/* Snabbvägen först. Går den igenom är det ett tryck, annars lämnar vi rutan
+   fokuserad så systemets egen meny kan ta över. */
 async function klistraIn(){
   if(!galleriOppet()) return;
   let filer = [];
   try {
-    for(const post of await navigator.clipboard.read()){
+    for(const post of await (navigator.clipboard?.read?.() ?? [])){
       const typ = post.types.find(t => t.startsWith('image/'));
       if(!typ) continue;
       const blob = await post.getType(typ);
       filer.push(new File([blob], 'urklipp.' + (typ.split('/')[1] || 'png'), { type: typ }));
     }
-  } catch(e){
-    return toast(e.name === 'NotAllowedError'
-      ? 'Appen fick inte läsa urklipp.'
-      : 'Kunde inte läsa urklipp på den här enheten.');
-  }
-  if(!filer.length) return toast('Ingen bild i urklipp.');
-  laggTillBilder(filer);
+  } catch(e){}      // tyst – vi har en andra väg
+  if(filer.length){ aterstallPasteTile(); return laggTillBilder(filer); }
+  document.getElementById('phPaste')?.focus();
+  toast('Håll ner i rutan och välj Klistra in.');
 }
 
 document.addEventListener('paste', e => {
-  // Klistrar man in i ett textfält ska texten dit, inte bli en bild
-  if(!galleriOppet() || e.target.closest?.('input, textarea, [contenteditable]')) return;
+  if(!galleriOppet()) return;
+  const iRutan = !!e.target.closest?.('#phPaste');
+  // Klistrar man in i ett vanligt textfält ska texten dit, inte bli en bild
+  if(!iRutan && e.target.closest?.('input, textarea, [contenteditable]')) return;
+  if(iRutan) e.preventDefault();          // inget ska hamna i rutan, bara i galleriet
   const filer = [...(e.clipboardData?.files || [])].filter(f => f.type.startsWith('image/'));
-  if(!filer.length) return;
+  if(!filer.length){
+    if(iRutan){ aterstallPasteTile(); toast('Ingen bild i urklipp.'); }
+    return;
+  }
   e.preventDefault();
+  aterstallPasteTile();
   laggTillBilder(filer);
 });
 

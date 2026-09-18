@@ -161,15 +161,27 @@ Galleriet tar emot bilder ur urklipp, inte bara ur filväljaren. Det är till f�
 bilder som finns i ett delat album men inte på telefonen: kopiera där, klistra in
 här, i stället för att spara ner till kamerarullen först.
 
-Två vägar in, för de fungerar olika:
+**Rutan i rutnätet är `contenteditable`, inte en knapp, och det är hela poängen.**
+`navigator.clipboard.read()` provades först och räckte inte: Safari på iPhone
+svarade tomt utan att ens fråga när bilden kom från en annan app. Ett riktigt
+inklistringsfält får däremot alltid systemets Klistra in-meny på långtryck.
 
-- **`paste`-händelsen** räcker på datorn. Den tar bilden ur `clipboardData.files`.
-  Den ignoreras när markören står i ett textfält, och när ingen resa är öppen.
-- **En egen ruta i rutnätet** som anropar `navigator.clipboard.read()`. iOS släpper
-  bara fram urklippet efter ett tryck och en egen bekräftelse, så där finns ingen
-  genväg. Rutan visas bara om webbläsaren har API:et.
+Tre detaljer som håller ihop det:
 
-Båda går vidare till `laggTillBilder()`, samma väg som filväljaren, så bilderna
+- Etiketten ligger i ett eget `contenteditable="false"`, så markören aldrig hamnar
+  i den och texten inte går att redigera bort.
+- `inputmode="none"` håller tangentbordet borta, och `caret-color: transparent`
+  döljer markören. Rutan ska se ut som en ruta, inte som ett textfält.
+- `paste` i rutan gör alltid `preventDefault()`. Annars hade text eller bilder
+  hamnat inuti rutan i stället för i galleriet.
+
+Snabbvägen finns kvar: ett tryck provar `clipboard.read()` först, och lyckas det
+är det klart med ett tryck. Annars lämnas rutan fokuserad med en instruktion.
+
+`paste`-händelsen fungerar också var som helst i en öppen resa, vilket räcker på
+datorn. Den ignoreras när markören står i ett vanligt textfält.
+
+Allt går vidare till `laggTillBilder()`, samma väg som filväljaren, så bilderna
 krymps och får omslag på precis samma sätt.
 
 > Varför inte hämta omslaget automatiskt ur ett Google Photos-album? Webbläsaren
