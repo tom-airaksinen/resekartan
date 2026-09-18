@@ -155,6 +155,18 @@ byts bilden rakt av utan glid.
 **Att ta bort en bild sker bara i helskärmsläget.** Kryssen i rutnätet togs bort:
 man raderar sällan, och de gjorde att man inte vågade trycka på bilderna.
 
+### Frågerutan ligger överst
+
+`#ask` har `z-index: 100`, över allt annat. Den låg under bildvisaren (80), och
+då såg papperskorgen ut att inte göra något: frågan stod och väntade bakom bilden
+och dök upp först när man stängde visaren.
+
+Toasten ligger ännu högre men har `pointer-events: none`. Den är bara information
+och får aldrig fånga ett tryck som var tänkt för något under den.
+
+Escape i frågerutan gör `stopImmediatePropagation()`. Utan den stängde samma
+tangenttryck både frågan och visaren under.
+
 ### Klistra in en bild
 
 Galleriet tar emot bilder ur urklipp, inte bara ur filväljaren. Det är till för
@@ -176,7 +188,9 @@ Tre detaljer som håller ihop det:
   hamnat inuti rutan i stället för i galleriet.
 
 Snabbvägen finns kvar: ett tryck provar `clipboard.read()` först, och lyckas det
-är det klart med ett tryck. Annars lämnas rutan fokuserad med en instruktion.
+är det klart med ett tryck. Annars sätts markören i rutan och **rutan byter själv
+text** till "Håll ner här och välj Klistra in". Instruktionen får inte hänga på en
+toast som hinner försvinna eller som man missar.
 
 `paste`-händelsen fungerar också var som helst i en öppen resa, vilket räcker på
 datorn. Den ignoreras när markören står i ett vanligt textfält.

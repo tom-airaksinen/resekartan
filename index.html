@@ -373,7 +373,13 @@ h2.sec:first-child{margin-top:8px}
    rutan och systemets Klistra in-meny kommer fram på långtryck. */
 .grid-ph .klistra{cursor:text;caret-color:transparent;-webkit-user-select:text;user-select:text}
 .grid-ph .klistra:focus{outline:none;border-color:var(--accent);color:var(--accent)}
-.grid-ph .klistra .etikett{display:flex;flex-direction:column;align-items:center;gap:4px;pointer-events:none}
+.grid-ph .klistra .etikett{display:flex;flex-direction:column;align-items:center;gap:4px;pointer-events:none;
+  font-weight:600;line-height:1.25}
+/* Rutan säger själv vad som ska göras när den väntar på inklistring, i stället
+   för att instruktionen ligger i en toast man kan missa. */
+.grid-ph .klistra .vantar{display:none}
+.grid-ph .klistra:focus .vila{display:none}
+.grid-ph .klistra:focus .vantar{display:block}
 .ph-empty{padding:12px;border-radius:12px;border:1px dashed var(--line);color:var(--ink-3);font-size:13px}
 .ph-busy{font-size:13px;color:var(--ink-2);margin:8px 0 0;display:flex;align-items:center;gap:8px}
 
@@ -582,12 +588,15 @@ h2.sec:first-child{margin-top:8px}
   border:1px solid var(--line);border-radius:5px;padding:1px 5px;white-space:nowrap}
 
 /* ---------- Dialog och toast ---------- */
-#ask{position:fixed;inset:0;z-index:60;display:grid;place-items:center;background:rgba(27,39,51,.45);padding:24px}
+/* Frågerutan måste ligga över allt annat. Den kan öppnas från bildvisaren, och
+   låg den under blev det som att papperskorgen inte gjorde något – frågan stod
+   och väntade bakom bilden. */
+#ask{position:fixed;inset:0;z-index:100;display:grid;place-items:center;background:rgba(27,39,51,.45);padding:24px}
 #ask .box{width:100%;max-width:340px;background:var(--surface);border-radius:16px;padding:20px;box-shadow:0 12px 40px rgba(0,0,0,.3)}
 #ask p{margin:0 0 16px;font-size:15px}
 #ask .row{display:flex;gap:10px}
 #ask .row .btn{flex:1}
-#toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(84px + env(safe-area-inset-bottom,0px));z-index:70;
+#toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(84px + env(safe-area-inset-bottom,0px));z-index:110;pointer-events:none;
   background:var(--ink);color:var(--surface);padding:10px 16px;border-radius:999px;font-size:14px;font-weight:500;
   box-shadow:0 6px 20px rgba(0,0,0,.25);max-width:calc(100vw - 32px);text-align:center}
 .err-msg{color:var(--danger);font-size:13px;font-weight:500;margin:6px 0 0}

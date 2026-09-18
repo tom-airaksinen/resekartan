@@ -14,7 +14,7 @@ const AUTH = {
   hash: '5805d07268265f31365760d2aa2a450e97629e0d6a43c36829b54b3d971026c7'
 };
 const LS_KEY = 'resekartan.data', LS_AUTH = 'resekartan.unlocked', LS_SEEN = 'resekartan.inloggad', LS_LEGEND = 'resekartan.legend';
-const APP_VERSION = 'v43';   // följ sw.js CACHE, så man ser vad som faktiskt körs
+const APP_VERSION = 'v45';   // följ sw.js CACHE, så man ser vad som faktiskt körs
 
 /* ============================ Tema ============================
    Temat är per enhet och ligger i localStorage, inte i DB – Hedvig ska kunna ha
@@ -309,7 +309,11 @@ document.getElementById('askNo').onclick = () => closeAsk(false);
 askEl.addEventListener('click', e => { if(e.target === askEl) closeAsk(false); });
 addEventListener('keydown', e => {
   if(e.key !== 'Escape') return;
-  if(!askEl.hidden) return closeAsk(false);
+  if(!askEl.hidden){
+    // Stoppa här: annars stänger samma tangenttryck även det som ligger under
+    e.stopImmediatePropagation();
+    return closeAsk(false);
+  }
   if(!document.getElementById('cal').hidden) return closeCal();
 });
 
@@ -1299,7 +1303,7 @@ const addTile = `<button type="button" class="addph" id="phAdd">
 const kanKlistra = () => true;
 const pasteLabel = `<span class="etikett" contenteditable="false">
   <svg viewBox="0 0 24 24"><path d="M9 4H7a2 2 0 00-2 2v13a2 2 0 002 2h10a2 2 0 002-2V6a2 2 0 00-2-2h-2"/><rect x="9" y="2.5" width="6" height="3.5" rx="1.2"/></svg>
-  Klistra in</span>`;
+  <b class="vila">Klistra in</b><b class="vantar">Håll ner här<br>och välj Klistra in</b></span>`;
 const pasteTile = `<div class="addph klistra" id="phPaste" contenteditable="true" inputmode="none"
   role="button" tabindex="0" aria-label="Klistra in en bild">${pasteLabel}</div>`;
 const aterstallPasteTile = () => {
@@ -1514,8 +1518,16 @@ async function klistraIn(){
     }
   } catch(e){}      // tyst – vi har en andra väg
   if(filer.length){ aterstallPasteTile(); return laggTillBilder(filer); }
-  document.getElementById('phPaste')?.focus();
-  toast('Håll ner i rutan och välj Klistra in.');
+  // Snabbvägen gav inget. Sätt markören i rutan så systemets egen meny kan ta
+  // över; rutan byter själv text, så instruktionen inte hänger på en toast.
+  const el = document.getElementById('phPaste');
+  if(!el) return;
+  el.focus();
+  try {
+    const val = getSelection(), omr = document.createRange();
+    omr.selectNodeContents(el); omr.collapse(false);
+    val.removeAllRanges(); val.addRange(omr);
+  } catch(e){}
 }
 
 document.addEventListener('paste', e => {
@@ -1679,7 +1691,7 @@ document.getElementById('vPrev').onclick = () => step(-1);
 document.getElementById('vNext').onclick = () => step(1);
 document.getElementById('vDel').onclick = () => removePhoto(phCache[vIdx]?.id);
 addEventListener('keydown', e => {
-  if(viewerEl.hidden) return;
+  if(viewerEl.hidden || !askEl.hidden) return;   // frågerutan äger tangenterna när den är uppe
   if(e.key === 'Escape') closeViewer();
   if(e.key === 'ArrowLeft') step(-1);
   if(e.key === 'ArrowRight') step(1);
