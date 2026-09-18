@@ -301,8 +301,11 @@ vänta på.
 Tre saker tar fram formuläret: att inloggningen svarar att ingen är inloggad, att
 något går fel, eller att tolv sekunder gått utan besked.
 
-Statusraden under loggan dyker upp först efter 700 ms. Går starten fort ser man
-bara loggan och sedan kartan, i stället för tre rader text som avlöser varandra.
+Statusraden under loggan **tar alltid sin plats** i kortet och döljs med
+`visibility`, inte `display`. Dök den upp först när den behövdes växte kortet och
+allt innehåll hoppade till mitt i starten. Texten visas dessutom först efter
+1,2 sekunder, så en vanlig start hinner bli klar innan dess och man ser bara
+loggan och sedan kartan.
 
 Kortet står kvar när formuläret dyker upp, så startbilden växer till en
 inloggningsruta i stället för att bytas ut.

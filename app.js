@@ -14,7 +14,7 @@ const AUTH = {
   hash: '5805d07268265f31365760d2aa2a450e97629e0d6a43c36829b54b3d971026c7'
 };
 const LS_KEY = 'resekartan.data', LS_AUTH = 'resekartan.unlocked', LS_SEEN = 'resekartan.inloggad', LS_LEGEND = 'resekartan.legend';
-const APP_VERSION = 'v36';   // följ sw.js CACHE, så man ser vad som faktiskt körs
+const APP_VERSION = 'v37';   // följ sw.js CACHE, så man ser vad som faktiskt körs
 
 /* ============================ Tema ============================
    Temat är per enhet och ligger i localStorage, inte i DB – Hedvig ska kunna ha
@@ -86,10 +86,11 @@ function lockStatus(text){
   const box = document.getElementById('pwStatus');
   if(!box) return;
   clearTimeout(statusTimer);
-  if(!text){ box.hidden = true; return; }
+  if(!text){ box.classList.remove('pa'); return; }
   document.getElementById('pwStatusText').textContent = text;
-  if(!box.hidden) return;                       // redan framme, byt bara texten
-  statusTimer = setTimeout(() => { box.hidden = false; }, 700);
+  if(box.classList.contains('pa')) return;      // redan framme, byt bara texten
+  // 1,2 s: en vanlig start hinner bli klar innan dess, och då syns ingen text alls
+  statusTimer = setTimeout(() => box.classList.add('pa'), 1200);
 }
 /* Låsskärmen ligger kvar tills första ritningen är klar. Annars står man en stund
    framför en tom app och undrar om den hängt sig – och kraschar uppstarten blir det
