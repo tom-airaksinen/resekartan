@@ -560,13 +560,15 @@ h2.sec:first-child{margin-top:8px}
   .handle{display:none}
   .sheet-body{padding-top:16px}
   /* Toppraden ska aldrig nå in under sidopanelen */
-  #top{right:436px}
-  /* Här finns plats: sökfältet står framme hela tiden, utan knapp att slå på
-     det med och utan Avbryt att stänga det med. */
+  #top{right:436px;flex-direction:row;align-items:center}
+  /* Här finns plats: sökfältet står framme hela tiden bredvid namnet, utan knapp
+     att slå på det med och utan Avbryt att stänga det med. */
   #searchBtn{display:none}
-  #top .searchrow{display:flex;max-width:320px}
+  #top .searchrow{display:flex;width:320px;max-width:none;flex:none}
   #top .searchrow .cancel{display:none}
   #top.searching .toprow{display:flex}
+  /* Resenärsmenyn ligger kvar under namnet i stället för att ta plats i raden */
+  .whomenu{position:absolute;top:100%;margin-top:2px;left:calc(16px + env(safe-area-inset-left,0px))}
   .zoom{display:flex;right:436px;top:16px}
   #tabs{order:0;flex-direction:column;width:76px;border-top:0;border-right:1px solid var(--line);justify-content:flex-start;padding-top:14px}
   #tabs button{flex:none;padding:12px 0}
