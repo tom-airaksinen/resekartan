@@ -14,7 +14,7 @@ const AUTH = {
   hash: '5805d07268265f31365760d2aa2a450e97629e0d6a43c36829b54b3d971026c7'
 };
 const LS_KEY = 'resekartan.data', LS_AUTH = 'resekartan.unlocked', LS_SEEN = 'resekartan.inloggad', LS_LEGEND = 'resekartan.legend';
-const APP_VERSION = 'v35';   // följ sw.js CACHE, så man ser vad som faktiskt körs
+const APP_VERSION = 'v36';   // följ sw.js CACHE, så man ser vad som faktiskt körs
 
 /* ============================ Tema ============================
    Temat är per enhet och ligger i localStorage, inte i DB – Hedvig ska kunna ha
@@ -2147,8 +2147,14 @@ document.getElementById('tabs').addEventListener('click', e => {
   // upp till toppen igen.
   if(t === tab){
     if(t === 'karta'){
+      // Kartan har tre saker som kan ha flyttat sig: det som är öppet, kartans
+      // zoom och arkets läge och skrollning. Alla tre ska tillbaka.
       if(sel || selCountry){ backTab = 'karta'; clearSel(); }
-      else setSheet(.5);
+      else {
+        resetZoom();
+        setSheet(.5);
+        body.scrollTo({ top: 0, behavior: calm.matches ? 'auto' : 'smooth' });
+      }
     } else {
       document.getElementById('view-' + t)
         ?.scrollTo({ top: 0, behavior: calm.matches ? 'auto' : 'smooth' });
