@@ -14,7 +14,7 @@ const AUTH = {
   hash: '5805d07268265f31365760d2aa2a450e97629e0d6a43c36829b54b3d971026c7'
 };
 const LS_KEY = 'resekartan.data', LS_AUTH = 'resekartan.unlocked', LS_SEEN = 'resekartan.inloggad', LS_LEGEND = 'resekartan.legend';
-const APP_VERSION = 'v50';   // följ sw.js CACHE, så man ser vad som faktiskt körs
+const APP_VERSION = 'v51';   // följ sw.js CACHE, så man ser vad som faktiskt körs
 
 /* ============================ Tema ============================
    Temat är per enhet och ligger i localStorage, inte i DB – Hedvig ska kunna ha
@@ -1583,11 +1583,29 @@ async function klistraIn(){
     const poster = await (navigator.clipboard?.read?.() ?? []);
     logga(`read klar: ${poster.length} poster`);
     for(const post of poster){
-      spar.push(post.types.join('+'));
-      logga('post: ' + post.types.join(','));
+      spar.push(post.types.join('+') || '(utan typer)');
+      logga('post: ' + (post.types.join(',') || '(utan typer)'));
       const typ = post.types.find(t => t.startsWith('image/'));
       if(typ){
         filer.push(new File([await post.getType(typ)], 'urklipp', { type: typ }));
+        continue;
+      }
+      /* Safari på iPhone lämnar ut en post utan typer för bilder från andra
+         appar. Prova att be om vanliga typer ändå – enligt specen ska det
+         kasta, men det kostar inget att fråga. */
+      if(!post.types.length){
+        for(const t of ['image/png', 'image/jpeg', 'image/heic', 'image/heif', 'image/webp', 'text/html']){
+          try {
+            const blob = await post.getType(t);
+            logga(`getType(${t}) gav ${blob.type || '?'} ${Math.round(blob.size / 1024)} kB`);
+            if(t.startsWith('image/') && blob.size){ filer.push(new File([blob], 'urklipp', { type: blob.type || t })); break; }
+            if(t === 'text/html'){
+              const src = imgSrcUrHtml(await blob.text());
+              const f = src && await filFranUrl(src).catch(() => null);
+              if(f){ filer.push(f); break; }
+            }
+          } catch(e){ logga(`getType(${t}): ${e.name}`); }
+        }
         continue;
       }
       // Safari lämnar ibland bara ut bilden som en adress i html
@@ -1601,7 +1619,9 @@ async function klistraIn(){
   logga(`read gav ${filer.length} bild(er)`);
   if(filer.length){ urklippsInfo = ''; aterstallPasteTile(); return laggTillBilder(filer); }
   el?.focus();      // låt systemets egen Klistra in-meny ta över
-  visaUrklipp('läsning gav ' + (spar.join(' | ') || 'inget'));
+  visaUrklipp(spar.some(x => x === '(utan typer)')
+    ? 'Safari lämnar inte ut den här bilden till appen. Håll ner i rutan och välj Klistra in i menyn.'
+    : 'läsning gav ' + (spar.join(' | ') || 'inget'));
 }
 
 /* Webbläsaren la in bilden i rutan i stället för att skicka den som fil.
