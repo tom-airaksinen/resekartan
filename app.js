@@ -14,7 +14,7 @@ const AUTH = {
   hash: '5805d07268265f31365760d2aa2a450e97629e0d6a43c36829b54b3d971026c7'
 };
 const LS_KEY = 'resekartan.data', LS_AUTH = 'resekartan.unlocked', LS_SEEN = 'resekartan.inloggad', LS_LEGEND = 'resekartan.legend';
-const APP_VERSION = 'v34';   // följ sw.js CACHE, så man ser vad som faktiskt körs
+const APP_VERSION = 'v35';   // följ sw.js CACHE, så man ser vad som faktiskt körs
 
 /* ============================ Tema ============================
    Temat är per enhet och ligger i localStorage, inte i DB – Hedvig ska kunna ha
@@ -2141,13 +2141,20 @@ function setTab(t){
 document.getElementById('tabs').addEventListener('click', e => {
   const b = e.target.closest('[role=tab]');
   if(!b) return;
+  const t = b.dataset.tab;
   // Trycker man på fliken man redan står i backar man ut till dess grundvy,
-  // som i de flesta iOS-appar
-  if(b.dataset.tab === 'karta' && tab === 'karta'){
-    if(sel || selCountry){ backTab = 'karta'; clearSel(); }
-    else setSheet(.5);
+  // som i de flesta iOS-appar: kartan släpper det som är öppet, listorna går
+  // upp till toppen igen.
+  if(t === tab){
+    if(t === 'karta'){
+      if(sel || selCountry){ backTab = 'karta'; clearSel(); }
+      else setSheet(.5);
+    } else {
+      document.getElementById('view-' + t)
+        ?.scrollTo({ top: 0, behavior: calm.matches ? 'auto' : 'smooth' });
+    }
   }
-  setTab(b.dataset.tab);
+  setTab(t);
 });
 
 
