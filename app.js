@@ -14,7 +14,7 @@ const AUTH = {
   hash: '5805d07268265f31365760d2aa2a450e97629e0d6a43c36829b54b3d971026c7'
 };
 const LS_KEY = 'resekartan.data', LS_AUTH = 'resekartan.unlocked', LS_SEEN = 'resekartan.inloggad', LS_LEGEND = 'resekartan.legend';
-const APP_VERSION = 'v45';   // följ sw.js CACHE, så man ser vad som faktiskt körs
+const APP_VERSION = 'v46';   // följ sw.js CACHE, så man ser vad som faktiskt körs
 
 /* ============================ Tema ============================
    Temat är per enhet och ligger i localStorage, inte i DB – Hedvig ska kunna ha
@@ -1303,7 +1303,7 @@ const addTile = `<button type="button" class="addph" id="phAdd">
 const kanKlistra = () => true;
 const pasteLabel = `<span class="etikett" contenteditable="false">
   <svg viewBox="0 0 24 24"><path d="M9 4H7a2 2 0 00-2 2v13a2 2 0 002 2h10a2 2 0 002-2V6a2 2 0 00-2-2h-2"/><rect x="9" y="2.5" width="6" height="3.5" rx="1.2"/></svg>
-  <b class="vila">Klistra in</b><b class="vantar">Håll ner här<br>och välj Klistra in</b></span>`;
+  Klistra in</span>`;
 const pasteTile = `<div class="addph klistra" id="phPaste" contenteditable="true" inputmode="none"
   role="button" tabindex="0" aria-label="Klistra in en bild">${pasteLabel}</div>`;
 const aterstallPasteTile = () => {
@@ -1326,9 +1326,10 @@ function renderPhotos(){
     `<figure data-id="${esc(p.id)}"${i === 0 ? ' class="hero"' : ''}>
       <img src="${p.prev || p.url}" alt="Bild ${i + 1} från resan" loading="lazy" data-open="${i}" draggable="false">
       <span class="cover">Omslag</span></figure>`).join('')}${addTile}${kanKlistra() ? pasteTile : ''}</div>
-    ${phCache.length
-      ? (phCache.length > 1 ? '<p class="hint">Håll på en bild och dra för att flytta den. Den första bilden är omslaget och visas i reselistorna.</p>' : '')
-      : '<p class="hint">Lägg till några favoriter från resan. Bilderna krymps innan de sparas, så de tar liten plats.</p>'}`;
+    <p class="hint">${phCache.length > 1
+      ? 'Håll på en bild och dra för att flytta den. Den första bilden är omslaget och visas i reselistorna. '
+      : phCache.length ? '' : 'Lägg till några favoriter från resan. Bilderna krymps innan de sparas, så de tar liten plats. '}
+      Klistra in: tryck på rutan, håll sedan ner i den och välj Klistra in.</p>`;
 }
 
 /* ---- Dra för att ändra ordning ----
@@ -1504,30 +1505,52 @@ async function laggTillBilder(valda){
 const galleriOppet = () => !!phTrip && !!document.getElementById('phBody')
   && editor.hidden && importer.hidden && viewerEl.hidden;
 
-/* Snabbvägen först. Går den igenom är det ett tryck, annars lämnar vi rutan
-   fokuserad så systemets egen meny kan ta över. */
+/* En bild kan komma in på fyra sätt, och Safari väljer inte samma som andra:
+   som fil, som en adress i text/html, eller genom att webbläsaren själv lägger
+   in en <img> i rutan. Alla fyra hanteras, annars fungerar det på datorn men
+   inte på telefonen. */
+async function filFranUrl(url, namn = 'urklipp'){
+  const res = await fetch(url);                 // blob: och data: går bra
+  const blob = await res.blob();
+  if(!blob.type.startsWith('image/')) return null;
+  return new File([blob], namn, { type: blob.type });
+}
+const imgSrcUrHtml = html => html.match(/<img[^>]+src="([^"]+)"/i)?.[1] || null;
+
 async function klistraIn(){
   if(!galleriOppet()) return;
-  let filer = [];
+  const el = document.getElementById('phPaste');
+  const filer = [];
   try {
     for(const post of await (navigator.clipboard?.read?.() ?? [])){
       const typ = post.types.find(t => t.startsWith('image/'));
-      if(!typ) continue;
-      const blob = await post.getType(typ);
-      filer.push(new File([blob], 'urklipp.' + (typ.split('/')[1] || 'png'), { type: typ }));
+      if(typ){
+        filer.push(new File([await post.getType(typ)], 'urklipp', { type: typ }));
+        continue;
+      }
+      // Safari lämnar ibland bara ut bilden som en adress i html
+      if(post.types.includes('text/html')){
+        const src = imgSrcUrHtml(await (await post.getType('text/html')).text());
+        const f = src && await filFranUrl(src).catch(() => null);
+        if(f) filer.push(f);
+      }
     }
-  } catch(e){}      // tyst – vi har en andra väg
+  } catch(e){}      // tyst – vi har fler vägar
   if(filer.length){ aterstallPasteTile(); return laggTillBilder(filer); }
-  // Snabbvägen gav inget. Sätt markören i rutan så systemets egen meny kan ta
-  // över; rutan byter själv text, så instruktionen inte hänger på en toast.
+  el?.focus();      // låt systemets egen Klistra in-meny ta över
+}
+
+/* Webbläsaren la in bilden i rutan i stället för att skicka den som fil.
+   Plocka upp den därifrån och städa rutan. */
+async function bildUrRutan(){
   const el = document.getElementById('phPaste');
   if(!el) return;
-  el.focus();
-  try {
-    const val = getSelection(), omr = document.createRange();
-    omr.selectNodeContents(el); omr.collapse(false);
-    val.removeAllRanges(); val.addRange(omr);
-  } catch(e){}
+  const src = el.querySelector('img')?.getAttribute('src');
+  aterstallPasteTile();
+  if(!src) return;
+  const f = await filFranUrl(src).catch(() => null);
+  if(f) laggTillBilder([f]);
+  else toast('Kunde inte läsa den inklistrade bilden.');
 }
 
 document.addEventListener('paste', e => {
@@ -1535,15 +1558,24 @@ document.addEventListener('paste', e => {
   const iRutan = !!e.target.closest?.('#phPaste');
   // Klistrar man in i ett vanligt textfält ska texten dit, inte bli en bild
   if(!iRutan && e.target.closest?.('input, textarea, [contenteditable]')) return;
-  if(iRutan) e.preventDefault();          // inget ska hamna i rutan, bara i galleriet
-  const filer = [...(e.clipboardData?.files || [])].filter(f => f.type.startsWith('image/'));
-  if(!filer.length){
-    if(iRutan){ aterstallPasteTile(); toast('Ingen bild i urklipp.'); }
+
+  const d = e.clipboardData;
+  const filer = [...(d?.files || [])].filter(f => f.type.startsWith('image/'));
+  if(filer.length){ e.preventDefault(); if(iRutan) aterstallPasteTile(); return laggTillBilder(filer); }
+
+  const html = d?.getData?.('text/html');
+  const src = html && imgSrcUrHtml(html);
+  if(src){
+    e.preventDefault();
+    if(iRutan) aterstallPasteTile();
+    filFranUrl(src).then(f => f && laggTillBilder([f])).catch(() => {});
     return;
   }
-  e.preventDefault();
-  aterstallPasteTile();
-  laggTillBilder(filer);
+
+  /* Ingen fil och ingen adress. Låt webbläsaren klistra in i rutan som den vill
+     och plocka upp resultatet efteråt – det är så Safari gör med bilder från
+     andra appar. Utanför rutan låter vi det vara. */
+  if(iRutan) setTimeout(bildUrRutan, 0);
 });
 
 async function removePhoto(id){

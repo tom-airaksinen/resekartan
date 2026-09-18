@@ -178,19 +178,32 @@ här, i stället för att spara ner till kamerarullen först.
 svarade tomt utan att ens fråga när bilden kom från en annan app. Ett riktigt
 inklistringsfält får däremot alltid systemets Klistra in-meny på långtryck.
 
-Tre detaljer som håller ihop det:
+**Bilden kan komma in på fyra sätt, och Safari väljer inte samma som andra.**
+Alla fyra hanteras, annars fungerar det på datorn men inte på telefonen:
+
+| Väg | Var |
+| --- | --- |
+| `clipboardData.files` | datorn, Android |
+| `text/html` med en `<img src>` | Safari lämnar ibland bara ut en adress |
+| en `<img>` som webbläsaren själv lägger i rutan | Safari, bilder från andra appar |
+| `clipboard.read()` | när webbläsaren tillåter det, ett tryck räcker |
+
+Den tredje är den viktiga och den minst uppenbara: **gör man `preventDefault()` på
+inklistringen i rutan hinner Safari aldrig lägga dit bilden**, och då finns inget
+att plocka upp. Därför låter vi den klistra in, läser ut bilden efteråt och städar
+rutan.
+
+Tre detaljer till:
 
 - Etiketten ligger i ett eget `contenteditable="false"`, så markören aldrig hamnar
-  i den och texten inte går att redigera bort.
+  i den och texten inte går att redigera bort. Den ska heller inte bytas ut medan
+  rutan är fokuserad – att röra i det redigerbara innehållet mitt under en
+  inklistring får Safari att tappa bort sig.
 - `inputmode="none"` håller tangentbordet borta, och `caret-color: transparent`
-  döljer markören. Rutan ska se ut som en ruta, inte som ett textfält.
-- `paste` i rutan gör alltid `preventDefault()`. Annars hade text eller bilder
-  hamnat inuti rutan i stället för i galleriet.
-
-Snabbvägen finns kvar: ett tryck provar `clipboard.read()` först, och lyckas det
-är det klart med ett tryck. Annars sätts markören i rutan och **rutan byter själv
-text** till "Håll ner här och välj Klistra in". Instruktionen får inte hänga på en
-toast som hinner försvinna eller som man missar.
+  döljer markören.
+- **`font-size: 16px` på rutan är inget stilval.** iOS zoomar in hela sidan när
+  man fokuserar ett redigerbart fält med mindre text än så. Etiketten sätter sin
+  egen storlek.
 
 `paste`-händelsen fungerar också var som helst i en öppen resa, vilket räcker på
 datorn. Den ignoreras när markören står i ett vanligt textfält.
