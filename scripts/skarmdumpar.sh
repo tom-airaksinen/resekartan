@@ -4,8 +4,13 @@
 #   scripts/skarmdumpar.sh [mapp-med-foton]
 #
 # Alltid exempeldatat i data/seed.js, aldrig familjens riktiga resor – sidan och
-# repot är publika. Anges en mapp läggs bilderna i den in på Italien-resan, så
-# galleriet och omslaget syns; de skalas till 1400 px på vägen in.
+# repot är publika. Mappen har en undermapp per resa, döpt efter resans titel:
+#
+#   foton/Italien/01-colosseum.jpg   ← första bilden blir omslag och herobild
+#   foton/Italien/02-trevi.jpg
+#   foton/Lofoten/01-reine.jpg
+#
+# Bilderna skalas till samma storlekar som appen själv sparar på vägen in.
 #
 # Två fällor som kostade en stund första gången:
 #   * headless Chrome golvar bredden vid 500 px. Mindre --window-size ger ändå
@@ -27,64 +32,94 @@ rm -rf "$TMP/.git"
 
 # Molnläget av → appen kör på seed.js, och låset hoppas över
 python3 - "$TMP" "$FOTON" <<'PY'
-import io, sys, os, base64, glob
+import io, sys, os, base64, glob, json
 tmp, fotomapp = sys.argv[1], sys.argv[2]
 
 k = os.path.join(tmp, 'data/firebase-config.js')
 s = io.open(k, encoding='utf-8').read()
 io.open(k, 'w', encoding='utf-8').write(s[:s.rfind('window.FIREBASE_CONFIG = {')] + '/* av i skärmdumpsläget */\n')
 
-bilder = []
+# { 'Italien': [dataurl, …], 'Lofoten': [dataurl, …] } – en undermapp per resa
+bilder = {}
 if fotomapp:
-    for f in sorted(glob.glob(os.path.join(fotomapp, '*')))[:8]:
-        if f.lower().endswith(('.jpg', '.jpeg', '.png', '.webp')):
-            typ = 'image/png' if f.lower().endswith('.png') else 'image/jpeg'
-            bilder.append('data:%s;base64,%s' % (typ, base64.b64encode(open(f, 'rb').read()).decode()))
-    print('  %d foton läggs in' % len(bilder))
+    for resa in sorted(os.listdir(fotomapp)):
+        mapp = os.path.join(fotomapp, resa)
+        if not os.path.isdir(mapp):
+            continue
+        ut = []
+        for f in sorted(glob.glob(os.path.join(mapp, '*')))[:10]:
+            if f.lower().endswith(('.jpg', '.jpeg', '.png', '.webp')):
+                typ = 'image/png' if f.lower().endswith('.png') else 'image/jpeg'
+                ut.append('data:%s;base64,%s' % (typ, base64.b64encode(open(f, 'rb').read()).decode()))
+        if ut:
+            bilder[resa] = ut
+            print('  %s: %d foton' % (resa, len(ut)))
 
 a = io.open(os.path.join(tmp, 'app.js'), encoding='utf-8').read()
 a = a.replace('    if(unlocked) openApp();', '    if(true) openApp();', 1)
 a += '''
 /* ---- Skärmdumpsläge, se scripts/skarmdumpar.sh ---- */
 const SKOTT_FOTON = %s;
+const SKOTT_BILDER = {};
+
+/* Bilderna måste in i lagringslagret, inte bara i phCache. showTrip() anropar
+   loadPhotos(), som annars skriver över dem med det tomma svaret från
+   IndexedDB – och syncThumb() raderar omslaget på köpet. */
+photos.list = async id => SKOTT_BILDER[id] || [];
+photos.listCached = async id => SKOTT_BILDER[id] || [];
+photos.full = async pid => {
+  for(const lista of Object.values(SKOTT_BILDER)){
+    const b = lista.find(x => x.id === pid);
+    if(b) return b.url;
+  }
+  return null;
+};
+
 setTimeout(async () => {
   const vad = new URLSearchParams(location.search).get('skott') || 'karta';
   filter.clear(); family().forEach(p => filter.add(p.id));
   const it = DB.trips.find(t => t.title === 'Italien') || DB.trips[0];
   const iso = it.stops[0].iso;
 
-  if(SKOTT_FOTON.length){
+  for(const [titel, urlar] of Object.entries(SKOTT_FOTON)){
+    const t = DB.trips.find(x => x.title === titel);
+    if(!t){ console.warn('Ingen resa heter', titel); continue; }
     // Krymp till samma storlekar som appen själv sparar, så bilderna beter sig lika
-    const prev = await Promise.all(SKOTT_FOTON.map(u => scaleUrl(u, PREV_SIDE, PREV_Q)));
-    const full = await Promise.all(SKOTT_FOTON.map(u => scaleUrl(u, PH_MAX_SIDE, .82)));
-    phTrip = it.id;
-    phCache = prev.map((p, i) => ({ id: 'skott' + i, tripId: it.id, ord: i, prev: p, url: full[i] }));
-    it.thumb = await makeThumb(prev[0]);
-    it.thumbOf = 'skott0'; it.thumbV = THUMB_V;
+    const prev = await Promise.all(urlar.map(u => scaleUrl(u, PREV_SIDE, PREV_Q)));
+    const full = await Promise.all(urlar.map(u => scaleUrl(u, PH_MAX_SIDE, .82)));
+    SKOTT_BILDER[t.id] = prev.map((p, i) => ({ id: titel + i, tripId: t.id, ord: i, prev: p, url: full[i] }));
+    t.thumb = await makeThumb(prev[0]);
+    t.thumbOf = titel + '0'; t.thumbV = THUMB_V;
   }
   refreshAll();
 
+  const harBilder = !!SKOTT_BILDER[it.id];
   const stall = () => {
-    if(vad === 'resa'){ showTrip(it.id); setSheet(SKOTT_FOTON.length ? .62 : .5, false); }
+    if(vad === 'resa'){ showTrip(it.id); setSheet(harBilder ? .72 : .5, false); }
     else if(vad === 'galleri'){ showTrip(it.id); setSheet(.9, false); }
     else if(vad === 'land'){ showCountry(iso); setSheet(.5, false); }
     else if(vad === 'stat') setTab('stat');
     else if(vad === 'lander') setTab('lander');
-    else setSheet(.5, false);
+    else setSheet(.62, false);   // två resor med omslag syns i listan
     ramaOm();
   };
   stall();
-  setTimeout(() => {
-    stall();
-    if(phCache.length){ renderPhotos(); skarpHero(it.id, phCache); }
-    if(vad === 'galleri') document.getElementById('phBody')?.scrollIntoView({ block: 'center' });
-  }, 1200);
+  setTimeout(stall, 1200);
   setTimeout(() => {
     document.querySelectorAll('.spin').forEach(e => e.remove());
-    if(!phCache.length) document.getElementById('photos')?.remove();
+    if(!harBilder) document.getElementById('photos')?.remove();
+    /* skarpHero() väntar på decode(), och den promisen drivs inte av den
+       virtuella tiden – herobilden fastnade i sitt suddiga laddningsläge.
+       Sätt slutläget för hand. */
+    const hero = document.getElementById('triphero'), lista = SKOTT_BILDER[it.id];
+    if(hero && lista){
+      hero.querySelector('img').src = lista[0].url;
+      hero.classList.add('skarp');
+    }
+    if(vad === 'galleri') document.getElementById('phBody')?.scrollIntoView({ block: 'center' });
   }, 2700);
 }, 1400);
-''' % (str(bilder).replace("'", '"'))
+''' % (json.dumps(bilder))
 io.open(os.path.join(tmp, 'app.js'), 'w', encoding='utf-8').write(a)
 
 # Ramen som ger riktiga telefonmått trots headless golv på 500 px

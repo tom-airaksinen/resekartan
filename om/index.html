@@ -25,7 +25,10 @@ html{-webkit-text-size-adjust:100%}
 body{margin:0;background:var(--yta);color:var(--text);
   font:400 17px/1.6 Figtree,-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif}
 h1,h2,.stor{font-family:"Bricolage Grotesque",Figtree,sans-serif;font-weight:700;letter-spacing:-.02em;line-height:1.1}
-img{max-width:100%;display:block}
+/* height:auto är inte valfritt. Utan den gäller höjdattributet på bilden medan
+   bredden begränsas av max-width, och skärmdumparna blev hoptryckta på bredden
+   och utdragna på höjden. */
+img{max-width:100%;height:auto;display:block}
 a{color:var(--accent)}
 
 .inre{max-width:1000px;margin:0 auto;padding:0 22px}
@@ -133,18 +136,29 @@ footer a{color:var(--text-2)}
       <p>Datum, alla orter, vilka som var med och ett minne från resan. Avstickare över en
         gräns räknas som eget land men syns att de hörde till huvudresan.</p>
       <ul class="punkter">
-        <li><b>Bilder per resa</b> – omslaget syns i listorna, nyp för att zooma, svep ned för att stänga</li>
-        <li><b>Filtrera på vem som helst</b> – Hedvigs karta ser inte ut som Arons</li>
+        <li><b>Filtrera på vem som helst</b> – ett barns karta ser inte ut som ett annats</li>
+        <li><b>Avstickare</b> över en gräns räknas som eget land men hör synligt till huvudresan</li>
         <li><b>Planerade resor</b> syns på kartan men räknas inte i statistiken förrän ni varit där</li>
       </ul>
     </div>
     <div class="bild"><img src="bilder/resa.jpg" width="393" height="852" loading="lazy"
-      alt="Resan Italien med datum, orter, resenärer och ett minne från resan"></div>
+      alt="Resan Italien med omslagsbild på Colosseum, datum, orter, resenärer och ett minne från resan"></div>
   </section>
 
   <section class="rad vand">
-    <div class="bild"><img src="bilder/stat.jpg" width="393" height="852" loading="lazy"
-      alt="Statistik med antal länder, platser, resor och resdagar, länder per person och längst hemifrån"></div>
+    <div class="bild"><img src="bilder/galleri.jpg" width="393" height="852" loading="lazy"
+      alt="Bildgalleriet för Italien med sex foton, det första märkt som omslag"></div>
+    <div class="text">
+      <h2>Bilderna hör till resan</h2>
+      <p>Lägg in favoriterna direkt i resan. Den första blir omslaget och syns i listorna –
+        dra i rutorna för att byta. Tryck på en bild så fyller den skärmen: nyp för att
+        zooma, svep i sidled för att bläddra, svep ned för att stänga.</p>
+      <p>Bilderna krymps innan de sparas, så tjugo foton från en resa laddar några hundra
+        kilobyte i stället för flera megabyte.</p>
+    </div>
+  </section>
+
+  <section class="rad">
     <div class="text">
       <h2>Siffrorna man vill ha</h2>
       <p>Hur många länder, hur många dagar på resande fot, vem som varit flest ställen –
@@ -152,6 +166,8 @@ footer a{color:var(--text-2)}
       <p>Resdagar räknas som kalenderdagar, så en resa över nyår hamnar på rätt år och två
         halvor av familjen på var sitt håll blir en vecka borta, inte två.</p>
     </div>
+    <div class="bild"><img src="bilder/stat.jpg" width="393" height="852" loading="lazy"
+      alt="Statistik med antal länder, platser, resor och resdagar, länder per person och längst hemifrån"></div>
   </section>
 
   <section class="rad ensam">
