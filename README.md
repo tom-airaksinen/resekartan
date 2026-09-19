@@ -324,6 +324,47 @@ alltid från resans egna datum, inte från stoppen. Det kontrollerades 2026-09-1
 `days()` returnerar 0 i stället för `NaN` för en resa utan giltiga datum. Förut
 förgiftade en sådan resa hela summan.
 
+### Permanentboende är en resa utan resdagar
+
+Ett år i Moskva ska räknas som en resa och ett land, men inte som 365 dagar på
+resande fot. Kryssrutan **"Räkna som permanentboende, ta inte med i statistiken
+över resdagar"** i resedialogen sätter `t.bo`, och den gör exakt en sak: resan
+ger noll resdagar. Allt annat är sig likt – den räknas i antal resor, tänder
+landet på kartan, tar med sina platser och sitt avstånd i Längst hemifrån.
+
+Ingen automatisk regel på antal dagar. Februari i Tokyo är 28 dagar och ska
+räknas som resa, så varje gräns hade blivit godtycklig – och fel just där det
+spelar roll. Kryssrutan är en bedömning, och den är din.
+
+**Överlappet följer av samma flagga, utan en regel till.** Boendeperioderna
+plockas ut ur `bo`-resorna i `boendePerioder()`, nycklade på **person och land**.
+En dag räknas bort ur `travelDays()` först när *alla* som dagen gäller för bodde
+i landet:
+
+| Situation | Utfall |
+| --- | --- |
+| Tom hälsar på Karin tre veckor under hennes Moskvatermin | 21 dagar för Tom, 0 för Karin |
+| Samma resa sedd under "Alla resor" | 21 dagar – Tom var faktiskt borta |
+| Karin en vecka i Tokyo inuti Toms månad där | 7 dagar för Karin, Toms 28 rör sig inte |
+| Helg i Prag under Moskvaåret | riktiga resdagar – annat land |
+| Vecka i S:t Petersburg under Moskvaåret | inga resdagar – samma land man bodde i |
+
+Sista raden är gränsdragningen, och den är vald för att den går att förklara i
+en mening. Att skilja "resa hemifrån-hemifrån" från "resa inom landet man bodde
+i" hade krävt att boendet fick en egen hemort, och det är inte värt det för två
+fall.
+
+Tokyo-fallet behövde ingenting nytt: `travelDays()` är ett set av datum, så en
+resa inuti en annan räknas redan bara en gång.
+
+**Längsta resan och Längsta vistelsen är två olika rekord.** Moskvaåret hade
+annars vunnit det första för alltid, så boenden räknas bort därifrån och får en
+egen rad i Kul att veta – den visas bara när det finns ett boende inlagt.
+
+Boendet syns bara i resedetaljen: etiketten "Bodde här" vid titeln och
+"· räknas inte som resdagar" efter dagantalet. Listorna och kartan behandlar det
+som vilken resa som helst.
+
 **Planerade resor räknas aldrig med i statistiken.** `done()` sållar bort dem ur
 resdagar, antal resor, besökta länder, platser, "längst hemifrån" och landvyns
 sammanfattning. De syns på kartan i sin egen ton, i listorna och i sökningen –

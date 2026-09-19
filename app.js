@@ -15,7 +15,7 @@ const AUTH = {
 };
 const LS_KEY = 'resekartan.data', LS_AUTH = 'resekartan.unlocked', LS_SEEN = 'resekartan.inloggad', LS_LEGEND = 'resekartan.legend';
 const LS_FILTER = 'resekartan.filter';   // vilka resenärer som var valda sist, per enhet
-const APP_VERSION = 'v54';   // följ sw.js CACHE, så man ser vad som faktiskt körs
+const APP_VERSION = 'v55';   // följ sw.js CACHE, så man ser vad som faktiskt körs
 
 /* ============================ Tema ============================
    Temat är per enhet och ligger i localStorage, inte i DB – Hedvig ska kunna ha
@@ -381,16 +381,55 @@ const days = t => {
   if(isNaN(a) || isNaN(b)) return 0;       // en resa utan datum ska inte bli NaN
   return Math.max(1, Math.round((b - a) / 864e5) + 1);
 };
+/* ---- Permanentboende ----
+   En resa märkt `bo` är en resa som alla andra: den räknas i antal resor, tänder
+   landet på kartan och tar med sina platser. Det enda den inte ger är resdagar –
+   ett år i Moskva är inte 365 dagar på resande fot.
+
+   Perioderna nycklas på person **och land**. Bodde man i Moskva och åkte en helg
+   till Prag var det en riktig resa med riktiga resdagar; en vecka i S:t Petersburg
+   under samma år var det inte. Det är den enda gränsdragningen som går att
+   förklara i en mening. */
+function boendePerioder(){
+  const out = new Map();
+  DB.trips.forEach(t => {
+    if(!t.bo) return;
+    t.stops.forEach(st => {
+      const a = stopStart(t, st), b = stopEnd(t, st) || a;
+      if(!a) return;
+      stopWho(t, st).forEach(id => {
+        if(!out.has(id)) out.set(id, []);
+        out.get(id).push({ iso: st.iso, start: a, end: b });
+      });
+    });
+  });
+  return out;
+}
+const bodde = (perioder, id, isos, dag) =>
+  (perioder.get(id) || []).some(b => isos.includes(b.iso) && dag >= b.start && dag <= b.end);
+
 /* Alla kalenderdagar familjen varit borta, som ett set av datum.
    Två skäl att räkna så här i stället för att summera resornas längder:
    åkte två delar av familjen åt olika håll samma vecka var det en vecka borta,
-   inte två, och en resa över nyår ska fördelas på rätt år. */
+   inte två, och en resa över nyår ska fördelas på rätt år.
+
+   En dag räknas bort först när **alla** som dagen gäller för bodde i landet.
+   Hälsar Tom på Karin under hennes termin i Moskva är det tre veckors resa för
+   honom, noll för henne – och för "alla resor", där båda räknas, är det ändå en
+   dag borta, för Tom var det. */
 function travelDays(list){
-  const dagar = new Set();
+  const dagar = new Set(), perioder = boendePerioder();
   done(list).forEach(t => {
+    if(t.bo) return;
     const a = dt(t.start), b = dt(t.end);
     if(isNaN(a) || isNaN(b) || b < a) return;
-    for(const d = new Date(a); d <= b; d.setDate(d.getDate() + 1)) dagar.add(ymd(d));
+    const vilka = filter.size ? [...filter] : (t.who || []);
+    const isos = t.stops.map(st => st.iso);
+    for(const d = new Date(a); d <= b; d.setDate(d.getDate() + 1)){
+      const dag = ymd(d);
+      if(vilka.length && vilka.every(id => bodde(perioder, id, isos, dag))) continue;
+      dagar.add(dag);
+    }
   });
   return dagar;
 }
@@ -1291,9 +1330,10 @@ function renderTrip(t){
     ${t.thumb ? `<div class="triphero" id="triphero" data-tripid="${esc(t.id)}">
       <img src="${esc(t.thumb)}" alt="Omslagsbild från ${esc(t.title)}">
       <span class="spin"></span></div>` : ''}
-    <h2><span class="flag">${t.stops[0] ? flagOf(t.stops[0].iso) : '🏳️'}</span>${esc(t.title)}${t.planned ? '<span class="tag">Planerad</span>' : ''}</h2>
+    <h2><span class="flag">${t.stops[0] ? flagOf(t.stops[0].iso) : '🏳️'}</span>${esc(t.title)}${t.planned ? '<span class="tag">Planerad</span>' : ''}${t.bo ? '<span class="tag">Bodde här</span>' : ''}</h2>
     <div class="meta">
-      ${ICON.cal}<div>${span(t.start, t.end)} <span style="color:var(--ink-3)">· ${days(t)} dagar</span></div>
+      ${ICON.cal}<div>${span(t.start, t.end)} <span style="color:var(--ink-3)">· ${days(t)} dagar${
+        t.bo ? ' · räknas inte som resdagar' : ''}</span></div>
       ${ICON.pin}<div>${places.map(esc).join(', ') || '–'}</div>
       ${ICON.who}<div class="who-row">${(t.who||[]).map(p => `<span>${av(p)}${esc(personName(p))}</span>`).join('')}</div>
     </div>
@@ -2203,7 +2243,10 @@ function renderViews(){
   // Dag för dag, så en resa över nyår hamnar på båda åren
   travelDays(list).forEach(d => { const y = d.slice(0, 4); years[y] = (years[y] || 0) + 1; });
   const maxY = Math.max(1, ...Object.values(years));
-  const longest = [...done(list)].sort((a,b) => days(b) - days(a))[0];
+  // Ett år i Moskva skulle annars vinna "längsta resan" för alltid, och det är
+  // inte samma sorts rekord. Boendena får en egen rad.
+  const longest = [...done(list)].filter(t => !t.bo).sort((a,b) => days(b) - days(a))[0];
+  const longestBo = [...done(list)].filter(t => t.bo).sort((a,b) => days(b) - days(a))[0];
   const cc = {};
   done(list).forEach(t => { const i = t.stops[0]?.iso; if(i && !isHome(i)) cc[i] = (cc[i]||0) + 1; });
   const most = Object.entries(cc).sort((a,b) => b[1] - a[1])[0];
@@ -2237,6 +2280,7 @@ function renderViews(){
 
     <h2 class="sec">Kul att veta</h2><dl class="facts">
       <dt>Längsta resan</dt><dd>${longest ? `${esc(longest.title)}, ${days(longest)} dagar` : '–'}</dd>
+      ${longestBo ? `<dt>Längsta vistelsen</dt><dd>${esc(longestBo.title)}, ${days(longestBo)} dagar</dd>` : ''}
       <dt>Flest resor till</dt><dd>${most ? `${esc(countryName(most[0]))} (${most[1]})` : '–'}</dd>
       <dt>Senaste nya landet</dt><dd>${esc(newest)}</dd>
       <dt>Avstickare</dt><dd>${done(list).reduce((n,t) => n + t.stops.filter(x => x.side).length, 0)}</dd>
@@ -2538,7 +2582,7 @@ const blankStop = (iso, side = false) => ({ iso, side, places: [blankPlace()] })
 function blankTrip(iso){
   const today = new Date().toISOString().slice(0,10);
   return { id: 't' + Date.now().toString(36), title: countryName(iso), start: today, end: today,
-           who: family().map(p => p.id), planned: false, note: '', link: '', stops: [blankStop(iso)] };
+           who: family().map(p => p.id), planned: false, bo: false, note: '', link: '', stops: [blankStop(iso)] };
 }
 // Länder vi redan varit i – snabbval högst upp i landsökningen
 function recentCountries(n){
@@ -2620,6 +2664,7 @@ function renderEditor(){
         ? esc(span(draft.start, draft.end)) + ` <span style="color:var(--ink-3)">· ${days(draft)} ${days(draft) === 1 ? 'dag' : 'dagar'}</span>`
         : '<span class="ph">Välj datum</span>'}</button></div>
     <div class="field"><label class="check"><input type="checkbox" id="fPlanned" ${draft.planned ? 'checked' : ''}> Planerad resa (inte gjord än)</label></div>
+    <div class="field"><label class="check"><input type="checkbox" id="fBo" ${draft.bo ? 'checked' : ''}> Räkna som permanentboende, ta inte med i statistiken över resdagar</label></div>
     <div class="field"><label class="fl">Vilka var med?</label>${whoPicker(draft.who, 'trip')}</div>
     <div class="field"><label class="fl" for="fNote">Minne från resan</label>
       <textarea id="fNote" placeholder="Vad gjorde vi? Vad var bäst?">${esc(draft.note)}</textarea></div>
@@ -2691,6 +2736,7 @@ function readDraft(){
   const g = id => document.getElementById(id);
   draft.title = g('fTitle')?.value.trim() ?? draft.title;
   draft.planned = !!g('fPlanned')?.checked;
+  draft.bo = !!g('fBo')?.checked;
   draft.note = g('fNote')?.value.trim() ?? draft.note;
   const rå = g('fLink')?.value;
   if(rå !== undefined){ draft.linkRå = rå.trim(); draft.link = cleanUrl(rå); }
