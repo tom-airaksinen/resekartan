@@ -841,6 +841,21 @@ visas bara när det finns något att rätta. Ingen automatisk omskrivning – at
 gissa om namn som redan står inskrivna är precis det sortens hjälpsamhet som
 förstör data.
 
+**Valet av träff är med flit förlåtande.** Två skydd gjorde det sprött: målet
+måste vara samma element vid `pointerup`, och fingret fick inte flytta sig mer än
+tio punkter. På iPhone glider listan till av sig själv – tangentbordet öppnas,
+förslagsraden dyker upp, Safari skrollar fram fältet – och då föll trycket, utan
+att något syntes hända. Nu räcker det att trycket började på en träff och släpptes
+inom 24 punkter, och både `pointerup` och `click` leder fram; den som hinner
+först. Ett `pointercancel` kastar inte kandidaten direkt, för ett `click` kan
+komma efter. En riktig skrollning i listan (över 24 punkter) väljer fortfarande
+inget.
+
+`SOK_LOG_ON` i `app.js` ritar en logg under formuläret med vilka händelser som
+faktiskt kom fram. Den finns för att buggen lagades två gånger på teori och höll
+båda gångerna – samma läxa som inklistringen lärde ut. Slå av flaggan när det är
+avgjort.
+
 **Ett tryck på en träff kunde se ut att inte göra något.** Två orsaker, båda
 åtgärdade i v54:
 

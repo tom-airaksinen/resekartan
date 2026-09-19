@@ -15,7 +15,7 @@ const AUTH = {
 };
 const LS_KEY = 'resekartan.data', LS_AUTH = 'resekartan.unlocked', LS_SEEN = 'resekartan.inloggad', LS_LEGEND = 'resekartan.legend';
 const LS_FILTER = 'resekartan.filter';   // vilka resenärer som var valda sist, per enhet
-const APP_VERSION = 'v65';   // följ sw.js CACHE, så man ser vad som faktiskt körs
+const APP_VERSION = 'v66';   // följ sw.js CACHE, så man ser vad som faktiskt körs
 
 /* ============================ Tema ============================
    Temat är per enhet och ligger i localStorage, inte i DB – Hedvig ska kunna ha
@@ -2978,7 +2978,8 @@ function renderEditor(){
       <button type="button" class="btn ghost" data-addstop="0">+ Land</button>
       <button type="button" class="btn ghost" data-addstop="1">+ Avstickare</button>
     </div>
-    ${editingId ? `<div class="actions"><button type="button" class="btn danger" data-del="${esc(editingId)}">Ta bort resan</button></div>` : ''}`;
+    ${editingId ? `<div class="actions"><button type="button" class="btn danger" data-del="${esc(editingId)}">Ta bort resan</button></div>` : ''}
+    ${SOK_LOG_ON ? `<pre id="sokLog" class="soklog"${sokLog.length ? '' : ' hidden'}>${esc(sokLog.join('\n'))}</pre>` : ''}`;
   edBody.scrollTop = kvar;
 }
 
@@ -3246,10 +3247,13 @@ edBody.addEventListener('click', e => {
    än tio punkter var det en skrollning i listan, inte ett val. */
 function valjTraff(hit){
   const box = hit.closest('[data-results]');
-  if(!box || !draft) return;
+  if(!box) return sokLogga('AVBRÖT: hittade ingen resultatruta');
+  if(!draft) return sokLogga('AVBRÖT: inget utkast');
   const [i, j] = box.dataset.results.split('.').map(Number);
   const [lat, lon] = String(hit.dataset.hit || '').split(',').map(Number);
-  if(!draft.stops[i]?.places[j] || !isFinite(lat) || !isFinite(lon)) return;
+  if(!draft.stops[i]?.places[j]) return sokLogga('AVBRÖT: ingen plats ' + i + '.' + j);
+  if(!isFinite(lat) || !isFinite(lon)) return sokLogga('AVBRÖT: ogiltig position');
+  sokLogga('OK ' + lat.toFixed(3) + ', ' + lon.toFixed(3));
   clearTimeout(searchTimer); searchSeq++;   // ett svar på väg in ska inte fälla ut listan igen
   readDraft();
   Object.assign(draft.stops[i].places[j], { lat, lon, name: hit.dataset.name || draft.stops[i].places[j].name });
@@ -3257,20 +3261,67 @@ function valjTraff(hit){
   fyllPlatsrad(i, j);
 }
 
+/* ---- Synlig logg ----
+   Ortsökningen har gått sönder två gånger på iPhone utan att det gick att se
+   varför, och båda lagningarna byggde på en teori. Samma läxa som från
+   inklistringen: logga på skärmen innan du gissar. Raden under träffarna visar
+   vilka händelser som faktiskt kom fram. Slå av med SOK_LOG_ON när det är löst. */
+const SOK_LOG_ON = true;
+const sokLog = [];
+function sokLogga(txt){
+  if(!SOK_LOG_ON) return;
+  sokLog.push(new Date().toTimeString().slice(3, 8) + ' ' + txt);
+  if(sokLog.length > 12) sokLog.shift();
+  const el = document.getElementById('sokLog');
+  if(el){ el.hidden = false; el.textContent = sokLog.join('\n'); }
+}
+
+/* Valet är med flit förlåtande. Två skydd gjorde det sprött: målet måste vara
+   samma element vid pointerup, och fingret fick inte flytta sig mer än tio
+   punkter. På iPhone glider listan till av sig själv – tangentbordet öppnas,
+   förslagsraden dyker upp, och Safari skrollar fram fältet – och då föll
+   trycket. Nu räcker det att trycket började på en träff och släpptes någorlunda
+   nära den; både pointerup och click leder fram, den som hinner först. */
 let traffNed = null;
+const traffKlar = (hit, via) => {
+  if(!traffNed || traffNed.hit !== hit) return;
+  traffNed = null;
+  sokLogga('väljer via ' + via);
+  valjTraff(hit);
+};
 edBody.addEventListener('pointerdown', e => {
   const hit = e.target.closest('[data-hit]');
   if(!hit) return;
-  e.preventDefault();                       // behåll fokus, stäng inte tangentbordet
-  traffNed = { hit, x: e.clientX, y: e.clientY };
+  traffNed = { hit, x: e.clientX, y: e.clientY, t: Date.now() };
+  sokLogga('ned på "' + (hit.dataset.name || '?') + '" (' + e.pointerType + ')');
 });
 edBody.addEventListener('pointerup', e => {
-  const ned = traffNed; traffNed = null;
-  if(!ned || e.target.closest('[data-hit]') !== ned.hit) return;
-  if(Math.hypot(e.clientX - ned.x, e.clientY - ned.y) > 10) return;   // en skrollning i listan
-  valjTraff(ned.hit);
+  const ned = traffNed;
+  if(!ned) return sokLogga('upp utan ned');
+  const flytt = Math.round(Math.hypot(e.clientX - ned.x, e.clientY - ned.y));
+  const samma = e.target.closest('[data-hit]') === ned.hit;
+  sokLogga('upp flytt=' + flytt + ' samma=' + samma);
+  // Rör sig fingret långt var det en skrollning i listan, inte ett val
+  if(flytt > 24) { traffNed = null; return; }
+  traffKlar(ned.hit, 'pointerup');
 });
-edBody.addEventListener('pointercancel', () => { traffNed = null; });
+/* pointercancel kommer när Safari bestämmer sig för att gesten var en skrollning,
+   men också ibland av sig självt. Kandidaten kastas därför inte direkt – ett
+   click kan fortfarande komma efter, och då ska trycket räknas. */
+edBody.addEventListener('pointercancel', () => {
+  sokLogga('avbruten (pointercancel)');
+  const ned = traffNed;
+  setTimeout(() => { if(traffNed === ned) traffNed = null; }, 500);
+});
+edBody.addEventListener('click', e => {
+  const hit = e.target.closest('[data-hit]');
+  if(!hit) return;
+  sokLogga('klick');
+  if(traffNed) return traffKlar(hit, 'click');
+  // Trycket hann aldrig registreras som pointerdown – välj ändå
+  sokLogga('väljer via click utan ned');
+  valjTraff(hit);
+});
 
 function fyllPlatsrad(i, j){
   const row = edBody.querySelector(`[data-place="${i}.${j}"]`);
