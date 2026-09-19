@@ -2,7 +2,8 @@
 
 Interaktiv världskarta över familjens resor. Mobilen först.
 
-**Live:** https://tom-airaksinen.github.io/resekartan/
+**Live:** https://resekartan.tomairaksinen.se
+(gamla `tom-airaksinen.github.io/resekartan/` skickar vidare hit med 301)
 
 ## Deploya
 
@@ -11,8 +12,9 @@ git push          # GitHub Pages bygger om från main automatiskt
 ```
 
 Repot är publikt – det krävs för Pages på GitHub Free. Familjens riktiga resor
-ligger aldrig här utan i `localStorage` (och senare Firebase), och lösenordet står
-varken i koden eller i den här filen.
+ligger aldrig här utan i Firestore, och varken lösenord eller e-post står i koden
+eller i den här filen. `CNAME` i repotroten skrevs av GitHub när den egna adressen
+sattes upp; den ska ligga kvar.
 
 ### Egen adress: resekartan.tomairaksinen.se
 
@@ -38,9 +40,14 @@ skickar vidare, så gamla hemskärmsgenvägar överlever.
 
 ## Status
 
-**Live sedan 2026-09-16.** Appen går att använda: lösenordslås, karta, och ett
-gränssnitt för att lägga till, ändra och ta bort resor. Data ligger i `localStorage`
-på varje enhet. Nästa steg är Firebase, så alla fyra delar samma data.
+**Live sedan 2026-09-16, på egen adress sedan 2026-09-19.** I skarp drift: karta,
+resor, landvy, statistik, bilder per resa och import från albumnamn. Firebase är
+påkopplat, så alla fyra delar samma data och loggar in med familjekontot – data i
+Firestore, bilder i en subcollection, inloggning i Firebase Authentication.
+
+Utan `data/firebase-config.js` ifylld faller appen tillbaka på lokalt läge:
+`localStorage` per enhet och lösenordshashen i `app.js`. Det är kvar för att
+appen ska gå att köra och testa utan moln, inte för att det är vägen framåt.
 
 ## Kör lokalt
 
@@ -48,8 +55,9 @@ på varje enhet. Nästa steg är Firebase, så alla fyra delar samma data.
 python3 -m http.server 8000     # öppna http://localhost:8000
 ```
 
-Krävs för att `data/world-110m.js` ska laddas (går även med `file://`, men
-servern är enklare).
+Krävs för att `data/world-50m.js` ska laddas (går även med `file://`, men servern
+är enklare). `localhost` ligger redan bland Firebases Authorized domains, så
+inloggningen fungerar lokalt.
 
 ## Så är den byggd
 
@@ -212,6 +220,43 @@ byts bilden rakt av utan glid.
 
 **Att ta bort en bild sker bara i helskärmsläget.** Kryssen i rutnätet togs bort:
 man raderar sällan, och de gjorde att man inte vågade trycka på bilderna.
+
+### Nypa, panorera, dubbeltrycka
+
+Tre gester på samma yta i bildvisaren. Vilken det blir avgörs av hur många fingrar
+som ligger på skärmen och om bilden redan är inzoomad:
+
+| Gest | Vad den gör |
+| --- | --- |
+| två fingrar | nyper: skalar kring punkten mellan fingrarna, och flyttar med om nypet dras |
+| ett finger, oinzoomad | svep till nästa bild, precis som förut |
+| ett finger, inzoomad | panorerar inuti bilden |
+| dubbeltryck | växlar mellan helbild och 2,5× på punkten man tryckte |
+
+Taket är 6×. Bilderna är på 1400 px, så de blir grynigare ju närmare man går – men
+att kunna gå nära en skylt eller ett ansikte är värt mer än att slippa se pixlarna.
+
+Fyra saker att veta om man rör koden:
+
+- **`touch-action: none` på `.vwrap` är förutsättningen.** Med `pan-y`, som det stod
+  förut, tar webbläsaren nypningen själv och zoomar hela sidan i stället för bilden;
+  appen får aldrig se gesten. Det finns inget att skrolla i visaren, så vi äger alla
+  fingrar på ytan.
+- **Punkten räknas mot mittrutans mitt, inte mot bildens.** `.vslide` är
+  otransformerad medan `<img>` bär zoomens transform, så rutan är den enda stabila
+  referensen – bildens `getBoundingClientRect()` ändrar sig av zoomen man just
+  håller på att räkna ut.
+- **Alla tre rutorna städas vid nollställning.** Bara mitten är inzoomad, men den man
+  lämnar bär annars kvar sin inline-transform och dyker upp inzoomad nästa gång den
+  roteras in i mitten. Zoomen nollställs vid varje bildbyte, i `step()`,
+  `paintViewer()` och `closeViewer()`.
+- **Variabeln heter `bildZoom`.** `zoom` är redan upptaget av d3:s zoom-beteende på
+  kartan, på modulnivå i samma fil.
+
+Svepet är avstängt när bilden är inzoomad – där panorerar ett finger i stället. Vill
+man till nästa bild zoomar man ut först, med dubbeltryck eller ett nyp inåt. Att
+låta svepet ta vid vid bildens kant vore trevligare men kräver att man vet var
+kanten går, och den beror på bildens proportioner inuti `object-fit: contain`.
 
 ### Frågerutan ligger överst
 
@@ -607,15 +652,24 @@ redigeringsfotens `#edErr` för validering. Använd inte de inbyggda.
 
 ### Lösenord
 
-Sidan är statisk och repot är publikt, så låset håller nyfikna ute – inte någon som
-läser källkoden. I `app.js` ligger bara en PBKDF2-hash (150 000 varv, SHA-256),
-aldrig lösenordet självt, och lösenordet skrivs inte heller här.
+**I molnläge gäller Firebase Authentication**, ett delat familjekonto med e-post och
+lösenord, och Firestore-reglerna släpper bara in det kontots uid. Lösenordet byts i
+Firebase-konsolen → Authentication → Users, inte i appen. Glömt det? Där finns både
+*Reset password* och möjligheten att sätta ett nytt direkt.
 
-Byt det under Inställningar → Lösenord: appen räknar fram den nya raden att klistra
-in i `AUTH` i `app.js`. Upplåsningen sparas sedan per enhet i `localStorage`.
+Firebase svarar med samma fel (`auth/invalid-credential`) för fel lösenord som för
+en adress utan konto, så appens text säger "Fel e-post eller lösenord" och kan inte
+säga vilket. Det är avsiktligt från Google – annars gick det att fiska efter vilka
+adresser som har konton.
 
-Riktiga resor hamnar i `localStorage` (och sedan Firebase), aldrig i repot – så
-koden kan ligga publikt utan att familjens resor gör det.
+Authorized domains i samma vy gäller bara OAuth-omdirigeringar (telefon, Google,
+tredjepart). E-post och lösenord bryr sig inte om den listan, så den är inte platsen
+att leta när inloggningen nekas.
+
+Den gamla PBKDF2-hashen i `AUTH` i `app.js` (150 000 varv, SHA-256) används bara i
+lokalt läge, när `data/firebase-config.js` är tom. Den byts under Inställningar →
+Lösenord, som räknar fram den nya raden att klistra in. Lösenordet självt står
+varken i koden eller här.
 
 ## Datamodell (exempel i `data/seed.js`)
 
@@ -770,6 +824,11 @@ eller klistra tillbaka.
 
 ## Nästa steg
 
-1. Firebase som gemensam databas, så alla fyra kan lägga in från mobil, padda och dator.
-   Då blir också frågan om publik sajt eller inloggning skarp – se `docs/oppna-fragor.md`.
-3. Foton per resa, grupperade per person. Se `docs/mockup-feedback.md`.
+Firebase, egen adress och foton per resa är på plats. Kvar står, i
+`docs/oppna-fragor.md`:
+
+1. Gästkonto som bara får läsa. Reglerna är fem rader, jobbet ligger i appen –
+   tre skrivningar sker av att bara titta. Se `docs/gastkonto.md`.
+2. Fler teman ur prototypen (Skymning, Stugan), och om designspåret ska väljas.
+3. Bilder grupperade per person, inte bara per resa. Se `docs/mockup-feedback.md`.
+4. Flera länkar per resa, med egna namn.

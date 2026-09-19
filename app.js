@@ -15,7 +15,7 @@ const AUTH = {
 };
 const LS_KEY = 'resekartan.data', LS_AUTH = 'resekartan.unlocked', LS_SEEN = 'resekartan.inloggad', LS_LEGEND = 'resekartan.legend';
 const LS_FILTER = 'resekartan.filter';   // vilka resenärer som var valda sist, per enhet
-const APP_VERSION = 'v59';   // följ sw.js CACHE, så man ser vad som faktiskt körs
+const APP_VERSION = 'v60';   // följ sw.js CACHE, så man ser vad som faktiskt körs
 
 /* ============================ Tema ============================
    Temat är per enhet och ligger i localStorage, inte i DB – Hedvig ska kunna ha
@@ -1844,7 +1844,7 @@ function openViewer(i){
   if(!phCache[i]) return;
   vIdx = i; viewerEl.hidden = false; paintViewer();
 }
-function closeViewer(){ viewerEl.hidden = true; }
+function closeViewer(){ viewerEl.hidden = true; nollstallZoom(false); }
 /* Originalen för den här sessionen. Bläddrar man fram och tillbaka ska samma
    bild inte hämtas om. */
 const fullCache = new Map();
@@ -1900,7 +1900,7 @@ function fyllRuta(n, i){
 function byggRutor(){
   const track = vTrack();
   if(track.children.length !== 3)
-    track.innerHTML = '<div class="vslide"><img alt=""></div>'.repeat(3);
+    track.innerHTML = '<div class="vslide"><img alt="" draggable="false"></div>'.repeat(3);
   [vIdx - 1, vIdx, vIdx + 1].forEach((i, n) => fyllRuta(n, i));
   nollstallSpar();
 }
@@ -1943,12 +1943,14 @@ function uppdateraVisare(){
 
 function paintViewer(){
   if(!phCache[vIdx]) return closeViewer();
+  nollstallZoom(false);
   byggRutor();
   uppdateraVisare();
 }
 function step(d){
   const n = vIdx + d;
   if(slideBusy || n < 0 || n >= phCache.length) return;
+  nollstallZoom(false);           // en ny bild börjar alltid oinzoomad
   if(calm.matches){ vIdx = n; paintViewer(); return; }   // utan rörelse: byt rakt av
   const track = vTrack();
   slideBusy = true;
@@ -1960,6 +1962,7 @@ function step(d){
     track.removeEventListener('transitionend', done);
     vIdx = n; slideBusy = false;
     roteraRutor(d);                  // rutan som redan syns blir den nya mitten
+    nollstallZoom(false);
     uppdateraVisare();
   };
   track.addEventListener('transitionend', done);
@@ -1975,13 +1978,116 @@ addEventListener('keydown', e => {
   if(e.key === 'ArrowLeft') step(-1);
   if(e.key === 'ArrowRight') step(1);
 });
-/* Svep i sidled: bilden följer fingret, och i ändarna tar den emot i stället för
-   att glida ut i tomma intet. */
+/* ---- Nypa, panorera och svepa ----
+   Tre gester på samma yta, och vilken det är avgörs av hur många fingrar som
+   ligger på skärmen och om bilden redan är inzoomad:
+
+   | | |
+   | --- | --- |
+   | två fingrar | nyp: skala och flytta ankaret |
+   | ett finger, oinzoomad | svep till nästa bild, som förut |
+   | ett finger, inzoomad | panorera inuti bilden |
+   | dubbeltryck | växla mellan helbild och 2,5× på den punkt man tryckte |
+
+   Bilderna är på 1400 px, så de blir grynigare ju närmare man går – men att
+   kunna gå nära en skylt eller ett ansikte är värt mer än att slippa se
+   pixlarna. Taket är 6×.
+
+   `touch-action: none` på ytan är en förutsättning: annars tar webbläsaren
+   nypningen själv och zoomar hela sidan i stället för bilden. */
+const ZOOM_MAX = 6, ZOOM_TAPP = 2.5;
+let bildZoom = { k: 1, x: 0, y: 0 };
+const pekare = new Map();
+let pinch = null, panorering = null, sistaTapp = 0, sistaTappPos = null;
+
+const mittImg = () => vTrack()?.children[1]?.querySelector('img');
+const avstand = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+const mitten = (a, b) => ({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 });
+
+/* Punkten räknas mot mittrutans mitt, inte mot bildens. Rutan är otransformerad
+   medan bilden bär zoomens transform, så rutan är den enda stabila referensen. */
+function motMitten(cx, cy){
+  const slide = vTrack()?.children[1];
+  if(!slide) return { x: 0, y: 0 };
+  const r = slide.getBoundingClientRect();
+  return { x: cx - (r.left + r.width / 2), y: cy - (r.top + r.height / 2) };
+}
+function klampaZoom(){
+  const img = mittImg();
+  const w = img?.clientWidth || 0, h = img?.clientHeight || 0;
+  const mx = Math.max(0, (bildZoom.k - 1) * w / 2), my = Math.max(0, (bildZoom.k - 1) * h / 2);
+  bildZoom.x = Math.min(mx, Math.max(-mx, bildZoom.x));
+  bildZoom.y = Math.min(my, Math.max(-my, bildZoom.y));
+}
+function visaZoom(mjukt){
+  const img = mittImg();
+  if(!img) return;
+  img.style.transition = mjukt ? 'transform .2s ease' : 'none';
+  img.style.transform = bildZoom.k === 1 ? '' : `translate(${bildZoom.x}px, ${bildZoom.y}px) scale(${bildZoom.k})`;
+  viewerEl.classList.toggle('zoomad', bildZoom.k > 1);
+}
+function nollstallZoom(mjukt){
+  bildZoom = { k: 1, x: 0, y: 0 };
+  pinch = null; panorering = null;
+  viewerEl.classList.remove('zoomad');
+  // Alla tre rutorna städas: den man lämnar bär annars kvar sin transform och
+  // dyker upp inzoomad nästa gång den roteras in i mitten.
+  vTrack()?.querySelectorAll('img').forEach(im => {
+    im.style.transition = mjukt ? 'transform .2s ease' : 'none';
+    im.style.transform = '';
+  });
+}
+/* Skala om kring en punkt: den modellpunkt som ligger under fingret ska ligga
+   kvar där när skalan ändras. */
+function zoomaTill(k, ankare, fran){
+  const k1 = Math.min(ZOOM_MAX, Math.max(1, k));
+  const r = k1 / fran.k;
+  bildZoom.k = k1;
+  bildZoom.x = ankare.x - r * (ankare.x - fran.x);
+  bildZoom.y = ankare.y - r * (ankare.y - fran.y);
+  if(k1 === 1){ bildZoom.x = 0; bildZoom.y = 0; }
+  klampaZoom();
+}
+
 viewerEl.addEventListener('pointerdown', e => {
   if(slideBusy || e.target.closest('.vbtn')) return;
+  pekare.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+  if(pekare.size === 2){
+    // Ett svep som blev en nypning: lämna tillbaka spåret innan vi zoomar
+    if(vDrag){ vDrag = null; vTrack().classList.remove('dragging'); vTrack().style.transform = 'translateX(-100%)'; }
+    panorering = null;
+    const [a, b] = [...pekare.values()], m = mitten(a, b);
+    pinch = { d: avstand(a, b) || 1, k: bildZoom.k, x: bildZoom.x, y: bildZoom.y, mx: m.x, my: m.y,
+              ankare: motMitten(m.x, m.y) };
+    return;
+  }
+  if(pekare.size !== 1) return;
+  if(bildZoom.k > 1){
+    panorering = { x: e.clientX, y: e.clientY, ox: bildZoom.x, oy: bildZoom.y };
+    return;
+  }
   vDrag = { x: e.clientX, w: viewerEl.clientWidth || 1, dx: 0, rör: false };
 });
+
 viewerEl.addEventListener('pointermove', e => {
+  const p = pekare.get(e.pointerId);
+  if(p){ p.x = e.clientX; p.y = e.clientY; }
+
+  if(pinch && pekare.size >= 2){
+    const [a, b] = [...pekare.values()], m = mitten(a, b);
+    zoomaTill(pinch.k * (avstand(a, b) / pinch.d), pinch.ankare, pinch);
+    // Flyttar man nypningen i sidled ska bilden följa med
+    bildZoom.x += m.x - pinch.mx; bildZoom.y += m.y - pinch.my;
+    klampaZoom();
+    return visaZoom(false);
+  }
+  if(panorering){
+    bildZoom.x = panorering.ox + (e.clientX - panorering.x);
+    bildZoom.y = panorering.oy + (e.clientY - panorering.y);
+    klampaZoom();
+    return visaZoom(false);
+  }
   if(!vDrag) return;
   const dx = e.clientX - vDrag.x;
   if(!vDrag.rör){
@@ -1993,20 +2099,53 @@ viewerEl.addEventListener('pointermove', e => {
   vDrag.dx = kant ? dx / 3 : dx;
   vTrack().style.transform = `translateX(calc(-100% + ${vDrag.dx}px))`;
 });
+
 function slutSvep(){
   if(!vDrag) return;
   const { dx, w, rör } = vDrag;
   vDrag = null;
   const track = vTrack();
   track.classList.remove('dragging');
-  if(!rör) return;
+  if(!rör) return true;
   const tröskel = Math.max(48, w * .18);
   const d = dx <= -tröskel ? 1 : dx >= tröskel ? -1 : 0;
   if(d && vIdx + d >= 0 && vIdx + d < phCache.length) step(d);
   else track.style.transform = 'translateX(-100%)';
+  return false;
 }
-viewerEl.addEventListener('pointerup', slutSvep);
-viewerEl.addEventListener('pointercancel', slutSvep);
+/* Dubbeltryck: två tryck inom 300 ms och åtta punkter från varandra. Det andra
+   trycket får inte ha varit ett svep eller en panorering. */
+function kanskeDubbeltryck(e){
+  const nu = Date.now(), pos = { x: e.clientX, y: e.clientY };
+  if(sistaTapp && nu - sistaTapp < 300 && sistaTappPos && avstand(sistaTappPos, pos) < 8){
+    sistaTapp = 0; sistaTappPos = null;
+    if(bildZoom.k > 1) nollstallZoom(true);
+    else { zoomaTill(ZOOM_TAPP, motMitten(pos.x, pos.y), bildZoom); visaZoom(true); }
+    return;
+  }
+  sistaTapp = nu; sistaTappPos = pos;
+}
+function slappPekare(e){
+  const fanns = pekare.delete(e.pointerId);
+  if(pinch && pekare.size < 2){
+    pinch = null;
+    if(bildZoom.k <= 1.02) nollstallZoom(true);
+    // Ett finger kvar efter nypningen: låt det panorera vidare utan uppehåll
+    const kvar = [...pekare.values()][0];
+    panorering = kvar && bildZoom.k > 1 ? { x: kvar.x, y: kvar.y, ox: bildZoom.x, oy: bildZoom.y } : null;
+    return;
+  }
+  if(panorering){
+    const flyttat = avstand({ x: e.clientX, y: e.clientY }, { x: panorering.x, y: panorering.y }) > 8;
+    panorering = null;
+    if(!flyttat && fanns) kanskeDubbeltryck(e);
+    return;
+  }
+  const stillastaende = slutSvep();
+  if(stillastaende && fanns) kanskeDubbeltryck(e);
+}
+viewerEl.addEventListener('pointerup', slappPekare);
+viewerEl.addEventListener('pointercancel', e => { pekare.delete(e.pointerId); pinch = null; panorering = null; slutSvep(); });
 
 function renderCountry(iso){
   sheet.classList.add('country'); sheet.classList.remove('detail');

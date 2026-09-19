@@ -4,10 +4,10 @@
 - [x] PWA i webbläsaren (som Flippa/Gnugga/Morsemaskinen) eller något annat? → **Svar:** Ja, responsiv webbapp på GitHub Pages. Firebase som gemensam databas i ett senare steg, så Hedvig kan lägga in från mobilen, Tom från datorn och Aron från paddan. (2026-09-16)
 - [x] Ska den vara publik eller kräva inloggning? → **Svar:** Rudimentärt lösenordsskydd räcker, inga användarkonton. Inloggningen sparas per enhet i localStorage. Byggt 2026-09-16: PBKDF2-hash i koden, aldrig lösenordet i klartext. (2026-09-16)
 - [x] Hur skyddas datat när Firebase kopplas på? → **Svar:** Firebase Authentication med ett delat familjekonto (e-post + lösenord), och Firestore-regler som bara släpper in det kontots uid. Då ersätter det den lokala lösenordsgrinden. Byggt 2026-09-16, väntar på att projektet skapas i konsolen – se `docs/firebase.md`. (2026-09-16)
-- [ ] Skapa Firebase-projektet och fyll i `data/firebase-config.js` + uid i `firestore.rules`.
+- [x] Skapa Firebase-projektet och fyll i `data/firebase-config.js` + uid i `firestore.rules`. → **Svar:** Klart. Projektet `resekartan-3b126` kör skarpt sedan 2026-09-17; familjekontot är inlagt i `familjen()` i reglerna. (2026-09-19)
 - [x] Eget repo på GitHub, eller en mapp i något befintligt? → **Svar:** Eget publikt repo, som morsemaskinen. Live på https://tom-airaksinen.github.io/resekartan/ sedan 2026-09-16. Publikt krävs för Pages på Free-planen. (2026-09-16)
-- [ ] Egen adress `resekartan.tomairaksinen.se`: CNAME hos Loopia → `tom-airaksinen.github.io.`, custom domain i GitHub Pages, och – lätt att glömma – `resekartan.tomairaksinen.se` som Authorized domain i Firebase Authentication, annars går det inte att logga in. Stegen står i README under Deploya → Egen adress. (2026-09-19)
-- [ ] Vad blir lösenordet? Byt från utgångsvärdet under Inställningar → Lösenord, och klistra in hashen i `AUTH` i `app.js`. Skriv aldrig lösenordet i repot.
+- [x] Egen adress `resekartan.tomairaksinen.se`? → **Svar:** Live 2026-09-19. CNAME hos Loopia (Loopia lägger själv till A-poster mot sitt webbhotell när man skapar subdomänen – de måste bort), custom domain + Enforce HTTPS i GitHub Pages, och domänen bland Firebases Authorized domains. Gamla adressen skickar vidare med 301. Stegen står i README under Deploya → Egen adress. (2026-09-19)
+- [x] Vad blir lösenordet? → **Svar:** Överspelat av molnläget. Inloggningen går via Firebase Authentication med familjekontot, och lösenordet byts i Firebase-konsolen → Authentication → Users. PBKDF2-hashen i `AUTH` används bara i lokalt läge. Skriv aldrig lösenordet i repot. (2026-09-19)
 
 ## Kartdata
 - [x] Vilken kartdata? → **Svar:** Natural Earth 1:50m via world-atlas (public domain, ~236 kB gzippat). Byttes från 110m 2026-09-16 för finare kuster; gav också Hongkong och Macau egna ytor. (2026-09-16)
@@ -44,3 +44,7 @@
 - [x] Moskvaåret vinner "Längsta resan" för alltid. → **Svar:** Boenden räknas bort därifrån och får en egen rad, "Längsta vistelsen", som bara syns när det finns ett boende inlagt. (2026-09-19)
 - [x] Ortsökningen sparade ortens eget alfabet (沖縄県 i stället för Okinawa) i Japan och Etiopien. → **Svar:** Åtgärdat 2026-09-19 (v58): Nominatim frågas med `accept-language=sv,en` och `namedetails=1`, Photon med `lang=en`, och vid dubbletter vinner ett latinskt namn. Svenska går fortfarande först. Redan sparade namn listas under Inställningar → Ortnamn att rätta och rättas för hand. (2026-09-19)
 - [ ] Är "Räkna som permanentboende, ta inte med i statistiken över resdagar" rätt ord i kryssrutan, eller räcker "Vi bodde här" när man vant sig? (2026-09-19)
+
+## Bildvisaren
+- [x] Ska man kunna nypa för att zooma i bilderna, även om upplösningen är låg? → **Svar:** Ja, byggt 2026-09-19 (v60). Nyp, panorering med ett finger när man är inzoomad, och dubbeltryck för 2,5×. Taket är 6×; bilderna är 1400 px, så det blir grynigt – men att kunna gå nära är värt det. (2026-09-19)
+- [ ] När man svepar vid kanten av en inzoomad bild: ska svepet ta vid och byta bild? Kräver att man vet var bildens kant går inuti `object-fit: contain`, alltså bildens proportioner. Nu måste man zooma ut först. (2026-09-19)
