@@ -17,7 +17,7 @@
       hämtade dem från nätet igen, och appnamnet blinkade när typsnittet kom
       efter texten. Nu ligger det som aldrig ändras (tredjepartsfiler med
       version i adressen) i en egen cache som överlever versionsbyten. */
-const CACHE  = 'resekartan-v60';      // appens egna filer, byts vid varje version
+const CACHE  = 'resekartan-v61';      // appens egna filer, byts vid varje version
 const STATIC = 'resekartan-static';   // typsnitt och bibliotek, överlever versionsbyten
 
 const SHELL = [

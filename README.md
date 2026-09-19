@@ -181,6 +181,21 @@ bakgrunden, så en trög uppkoppling inte lämnar rutnätet snurrande. Går det 
 fel visas ett meddelande med en **Försök igen**-knapp i stället för en
 återvändsgränd.
 
+**Originalet måste bytas in även när det redan är hämtat.** Det var buggen som
+gjorde att just de bilder som borde vara skarpast blev de som aldrig blev det:
+
+1. Rutan för nästa bild ritas av `fyllRuta()` medan man tittar på den föregående.
+   Då finns bara förhandsbilden på 400 px, och det är den som hamnar i `src`.
+2. Förladdningen hämtar hem originalet och lägger det i `fullCache`.
+3. Man bläddrar dit. `uppdateraVisare()` ser att allt är klart, skriver ingen
+   "laddar …" – och returnerade utan att någon bytt `src`. Rutan blev kvar på
+   400 px så länge man hade visaren öppen.
+
+Symtomet är lätt att missförstå: en bild som säger "laddar …" blir skarp till slut,
+medan en som inte säger något förblir suddig. `visaOriginal()` gör nu bytet, och
+förladdningen hämtar grannarna åt **båda** håll – bakåtbläddring var lika vanlig
+men förladdades inte alls.
+
 Bilder som lades in före v21 har originalet kvar i `foton`. De flyttas
 automatiskt, en i taget i bakgrunden, när resan öppnas. Originalet skrivs alltid
 före posten som pekar på det, så ett avbrutet nät aldrig lämnar en bildruta utan

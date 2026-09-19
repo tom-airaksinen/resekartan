@@ -15,7 +15,7 @@ const AUTH = {
 };
 const LS_KEY = 'resekartan.data', LS_AUTH = 'resekartan.unlocked', LS_SEEN = 'resekartan.inloggad', LS_LEGEND = 'resekartan.legend';
 const LS_FILTER = 'resekartan.filter';   // vilka resenärer som var valda sist, per enhet
-const APP_VERSION = 'v60';   // följ sw.js CACHE, så man ser vad som faktiskt körs
+const APP_VERSION = 'v61';   // följ sw.js CACHE, så man ser vad som faktiskt körs
 
 /* ============================ Tema ============================
    Temat är per enhet och ligger i localStorage, inte i DB – Hedvig ska kunna ha
@@ -1914,6 +1914,18 @@ function roteraRutor(d){
 
 /* Texten, knapparna och hämtningen av originalet. Originalet avkodas färdigt
    innan det byts in, annars hinner rutan bli tom ett ögonblick. */
+/* Byt in originalet i mittrutan när det redan är hämtat.
+   Utan det här steget fastnade bilden på förhandsbildens 400 px: rutan ritades
+   av fyllRuta() medan bilden fortfarande var "nästa bild", och då fanns bara
+   förhandsbilden. Sedan la förladdningen originalet i fullCache – och när man
+   bläddrade dit såg uppdateraVisare() att allt var klart, skrev ingen
+   "laddar …" och återvände utan att någon bytt src. Just de bilder som borde
+   vara skarpast blev alltså de som aldrig blev det. */
+function visaOriginal(p){
+  const url = p.url || fullCache.get(p.id);
+  const img = vTrack()?.children[1]?.querySelector('img');
+  if(url && img && img.getAttribute('src') !== url) img.src = url;
+}
 function uppdateraVisare(){
   const p = phCache[vIdx];
   if(!p) return closeViewer();
@@ -1923,7 +1935,8 @@ function uppdateraVisare(){
   cnt.textContent = klar ? nr : `${nr} · laddar …`;
   document.getElementById('vPrev').disabled = vIdx === 0;
   document.getElementById('vNext').disabled = vIdx >= phCache.length - 1;
-  if(klar){ loadFull(phCache[vIdx + 1]); return; }
+  // Grannarna åt båda håll: bläddring bakåt var lika vanlig men förladdades inte
+  if(klar){ visaOriginal(p); förladda(); return; }
   loadFull(p).then(async url => {
     if(!url){
       if(!viewerEl.hidden && phCache[vIdx]?.id === p.id) cnt.textContent = `${nr} · kunde inte hämta bilden`;
@@ -1937,8 +1950,13 @@ function uppdateraVisare(){
     const img = vTrack().children[1]?.querySelector('img');
     if(img) img.src = url;
     cnt.textContent = nr;
-    loadFull(phCache[vIdx + 1]);        // nästa i förväg, så bläddringen känns direkt
+    förladda();
   });
+}
+// Grannbilderna i förväg, så bläddringen känns direkt åt båda håll
+function förladda(){
+  loadFull(phCache[vIdx + 1]);
+  loadFull(phCache[vIdx - 1]);
 }
 
 function paintViewer(){
