@@ -14,6 +14,28 @@ Repot är publikt – det krävs för Pages på GitHub Free. Familjens riktiga r
 ligger aldrig här utan i `localStorage` (och senare Firebase), och lösenordet står
 varken i koden eller i den här filen.
 
+### Egen adress: resekartan.tomairaksinen.se
+
+Tre ställen, i den ordningen:
+
+1. **Loopia → Domännamn → tomairaksinen.se → DNS.** Lägg till en **CNAME**-post:
+   namn `resekartan`, värde `tom-airaksinen.github.io.` (med punkt sist). Ingen
+   A-post – den är bara för toppdomänen. Spridningen tar oftast minuter, ibland en
+   timme.
+2. **GitHub → repot → Settings → Pages → Custom domain.** Skriv in
+   `resekartan.tomairaksinen.se` och spara. GitHub kontrollerar DNS:en, skriver en
+   `CNAME`-fil i repot och beställer certifikat. När "DNS check successful" står
+   där: kryssa i **Enforce HTTPS** (knappen är grå tills certifikatet är klart,
+   vilket kan ta upp till en timme).
+3. **Firebase-konsolen → Authentication → Settings → Authorized domains → Add
+   domain:** `resekartan.tomairaksinen.se`. **Utan det steget går det inte att
+   logga in från den nya adressen** – Firebase Auth vägrar okända ursprung, och
+   felet ser ut som ett inloggningsfel snarare än ett domänfel.
+
+Firestore-reglerna rör man inte: de tittar på uid, inte på varifrån anropet kom.
+Den gamla adressen `tom-airaksinen.github.io/resekartan/` fortsätter fungera och
+skickar vidare, så gamla hemskärmsgenvägar överlever.
+
 ## Status
 
 **Live sedan 2026-09-16.** Appen går att använda: lösenordslås, karta, och ett
@@ -86,6 +108,29 @@ som är id:t den gjordes av) – inte bland bilderna. Det är med flit:
 
 `syncThumb()` håller den aktuell: efter uppladdning, borttagning, omordning och
 när ett galleri från före v19 öppnas första gången.
+
+### Herobilden i resedetaljen
+
+Öppnar man en resa med bilder ligger omslaget stort överst, i en 3:2-ruta som
+aldrig blir högre än 34 % av skärmen. Rutan har sin höjd från början, så sidan
+inte hoppar när bilden kommer.
+
+Den skärps i tre steg, och inget av dem kostar en extra hämtning som inte ändå
+hade skett:
+
+| Steg | Var kommer bilden ifrån | När |
+| --- | --- | --- |
+| miniatyren, uppskalad och suddig | `t.thumb`, ~5 kB, ligger redan i `DB` | direkt, i samma målning som resten |
+| förhandsbilden, 400 px | galleriets `prev`, hämtas ändå | när bildlistan svarat |
+| originalet, 1400 px | `loadFull()`, samma cache som bildvisaren | en halv sekund senare |
+
+Den halva sekunden är med flit: originalet ska inte konkurrera om nätet med det
+rutnät man faktiskt tittar på. Blurren tas bort så fort 400 px-versionen är inne,
+inte när originalet är det – annars står bilden och ser suddig ut i onödan.
+
+Går bildhämtningen fel tas blurren och snurran bort ändå, så rutan inte blir
+stående och snurrar. Finns ingen `thumb` ritas ingen hero alls; resan får den
+nästa gång den öppnas, för då har `syncThumb()` hunnit skapa miniatyren.
 
 ### Bilderna: förhandsbild och original
 
@@ -279,11 +324,21 @@ alltid från resans egna datum, inte från stoppen. Det kontrollerades 2026-09-1
 `days()` returnerar 0 i stället för `NaN` för en resa utan giltiga datum. Förut
 förgiftade en sådan resa hela summan.
 
+**Planerade resor räknas aldrig med i statistiken.** `done()` sållar bort dem ur
+resdagar, antal resor, besökta länder, platser, "längst hemifrån" och landvyns
+sammanfattning. De syns på kartan i sin egen ton, i listorna och i sökningen –
+det är trevligt att se vad som väntar – men man har inte varit där än.
+
 ### Färgskalan på kartan
 
-Besökta länder färgas efter hur många resor som gått dit, i tre steg: `--v1`,
-`--v2`, `--v3`. Skalan är **relativ mot den vy man har framför sig** – mörkast är
+Besökta länder färgas efter hur många resor som gått dit, i fyra steg: `--v1`
+till `--v4`. Skalan är **relativ mot den vy man har framför sig** – mörkast är
 alltid det mest besökta landet bland de resor som visas, ljusast är ett besök.
+
+**Ett besök är sitt eget steg.** Det absolut vanligaste är att ha varit i ett land
+en enda gång, och slogs den ettan ihop med tvåorna försvann just den skillnad man
+helst vill se. Steg 2–4 fördelar resten av spannet: med max 7 resor blir det
+1 · 2–3 · 4–5 · 6–7, med max 10 blir det 1 · 2–4 · 5–7 · 8–10.
 Filtrerar man på en person styr hennes fördelning, så tre resor kan vara mörkast
 för en i familjen och ljusast för en annan.
 
@@ -296,9 +351,9 @@ Det löses genom att teckenförklaringen skriver ut de faktiska talen – `legen
 räknar fram vilka antal som hamnar i vilket steg och visar bara de steg som
 används. Skalan får aldrig vara en gissning.
 
-Tre steg räcker. Fler nyanser går ändå inte att skilja åt i ett litet land på en
-telefonskärm. Stegen är jämna i ljushet, inte i mättnad, så skillnaden syns lika
-tydligt mellan varje par.
+Fyra steg är taket. Fler nyanser går ändå inte att skilja åt i ett litet land på
+en telefonskärm. Stegen är jämna i ljushet, inte i mättnad, så skillnaden syns
+lika tydligt mellan varje par.
 
 Ytorna är **platta, inte gradienter**. En gradient gjorde att samma antal resor
 såg olika ut beroende på var på jorden landet låg, vilket är precis vad en
@@ -324,6 +379,13 @@ resor, och enskildas ligger ett tryck bort.
 
 Det stod tidigare bara "Alla" under rubriken "Visa resor där dessa var med", vilket
 lovade det ena och gjorde det andra: en resa där bara en av oss var med syntes ändå.
+
+**Valet ligger kvar på enheten** (`resekartan.filter`, aldrig i `DB` – samma skäl
+som för temat). Hela familjen är fortfarande utgångsläget, men bara tills någon
+väljer något annat: Hedvig ska kunna filtrera på sig själv en gång och sedan möta
+sina egna resor varje gång hon öppnar appen. Står valet på personer som senare
+tagits bort faller appen tillbaka på hela familjen, inte på ett tomt filter –
+tomt betyder ju "alla resor", vilket är något helt annat.
 
 ### Länk till resan
 
@@ -515,6 +577,17 @@ Zoomrutan utgår från landets **största landmassa** – annars drar Alaska ut 
 USA-vyn – och utökas med platser som ligger utanför den (Gotland, Själland).
 Ortsnamn placeras runt pluppen och hoppas över om de ändå krockar.
 
+**Hela resekortet öppnar resan**, inte bara raden "Visa hela resan ›" längst ned.
+Kortet är en `div` med `role="button"` och `data-trip`, så den delegerade
+klicklyssnaren tar hand om det som vanligt; Enter och mellanslag har en egen rad
+kod eftersom en `div` inte får det gratis som en `<button>`.
+
+**Ett land utan träffar listar ändå sina resor.** Att söka fram Kirgizistan och
+mötas av "inget inlagt" är fel svar när det finns en resa dit – den råkar bara
+ligga utanför filtret. Nu står det vilket filter som gäller, och resorna listas
+med datum och vilka som var med, så man kan öppna dem direkt eller byta filter.
+Först när landet verkligen är tomt står det att det är tomt.
+
 ## Lägga in resor
 
 Resor → **Ny resa** börjar med att söka fram landet; de senast besökta ligger som
@@ -543,9 +616,54 @@ vilket håller sig väl inom Nominatims policy på max en förfrågan per sekund
 Betalalternativ som Google Places eller Mapbox behövs inte för den här
 användningen, och skulle kräva API-nyckel och kreditkort.
 
+**Ett tryck på en träff kunde se ut att inte göra något.** Två orsaker, båda
+åtgärdade i v54:
+
+- Valet ritade om **hela** formuläret, och då nollställs `edBody.scrollTop`.
+  Platserna ligger längst ned, så man kastades upp till titelfältet i samma
+  ögonblick – positionen kom in, men det syntes aldrig. Nu ritas bara den berörda
+  raden om (`fyllPlatsrad()`), och `renderEditor()` lägger tillbaka skrollningen
+  när den ändå måste rita om allt.
+- Valet skedde på `click`. På iPhone hinner fältet tappa fokus och tangentbordet
+  stängas mellan tryck och klick, och då flyttar listan sig under fingret. Nu
+  väljs träffen på `pointerup`, med `preventDefault()` på `pointerdown` så fokus
+  ligger kvar. Rör sig fingret mer än tio punkter var det en skrollning i listan
+  och inget val.
+
+**"Administrative" var inte felet.** Det är Nominatims ord för en ort som är
+ritad som en kommungräns – Long Beach och Utrecht är båda sådana, och de har
+koordinater som alla andra. Men rå OSM-engelska mitt i en svensk lista ser ut som
+ett fel, så `platstyp()` översätter: administrative → kommun, city → stad,
+island → ö. Träffar som verkligen saknar position sållas bort i `geocode()`
+i stället för att ligga kvar och inte gå att välja.
+
 **Resenärer:** familjen (`core: true`) är förkryssad på varje ny resa. Övriga –
 kompisar, mor- och farföräldrar – ligger under och kryssas i när de var med. Nya
 personer läggs till direkt i resedialogen eller under Inställningar.
+
+Brickorna skiljer sig åt på tre sätt samtidigt, inte bara på färg: den ivalda har
+personens egen färg i kanten, full styrka och en ifylld bock; den urvalda är grå,
+tonad och har en tom ring. Skillnaden låg förut bara i en svag bakgrundston, och
+den syns inte i solsken på en telefon – och inte alls för den som har svårt att
+skilja färger åt.
+
+### Importen kryssar i själv
+
+Resor → **Importera** läser albumnamn, en per rad, och slår upp orterna. Kryssen i
+granskningen bestämmer vad som sparas, och de sattes förut bara på rader där
+*varje* ort på raden hittades. En rad som såg alldeles färdig ut kunde därför
+ligga okryssad, och då sparades den inte – vilket såg ut som att importen
+tappade bort resan.
+
+Nu kryssas allt i som fick en position och ett datum. Orter som inte hittades
+står som "hittade inte …" på raden, så det syns vad som saknas i stället för att
+tystas ned med ett tomt kryss. Rader utan datum lämnas okryssade med en rad som
+säger varför, och **"Lägg in valda" är låst medan uppslagningen pågår** – trycktes
+den tidigare sparades bara de rader som hunnit bli klara.
+
+Kvittensen säger också till när de nya resorna hamnar utanför filtret: en rad som
+slutar på `-TA` blir en resa där bara två var med, och den syns inte under Hela
+familjen. "Resan sparades inte" var oftast "resan sparades men filtret döljer den".
 
 **Filtret** sitter i toppbaren och gäller i alla flikar. Det är en mängd och betyder
 OCH: väljer man Tom och Karin visas resorna där **båda** var med, inte alla resor

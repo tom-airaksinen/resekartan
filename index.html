@@ -25,7 +25,7 @@
   --ocean:#D3E2EA; --ocean-2:#C2D8E4; --land:#EDE9E0; --land-line:#FBFAF7; --coast:#FFFFFF;
   --home:#F0C4A9; --home-line:#C2552C;
   --visited:#2B4F84; --visited-2:#3A6098; --visited-line:#1E3A63; --planned:#8FA5C4;
-  --v1:#6E93C2; --v2:#3A6098; --v3:#1E3A63;
+  --v1:#8CAED6; --v2:#5E8BBF; --v3:#3A6098; --v4:#1E3A63;
   --pin:#1B2733; --pin-ring:#FBFAF7; --pin-side:#5B6B78;
   --surface:#FBFAF7; --surface-2:#F1EEE7; --line:#DDD8CC; --field:#FFFFFF;
   --ink:#1B2733; --ink-2:#5B6B78; --ink-3:#8A96A0;
@@ -40,7 +40,7 @@
   --ocean:#101B24; --ocean-2:#0A1218; --land:#26333D; --land-line:#17232C; --coast:#38495699;
   --home:#6B3A2A; --home-line:#F0774F;
   --visited:#5E86C2; --visited-2:#4A709F; --visited-line:#7FA3D8; --planned:#3F5773;
-  --v1:#3F5E8C; --v2:#5E86C2; --v3:#8FB4E6;
+  --v1:#37527A; --v2:#4E74AB; --v3:#6E9AD4; --v4:#9CBFEC;
   --pin:#ECEFF1; --pin-ring:#17232C; --pin-side:#AEBAC4;
   --surface:#17232C; --surface-2:#1F2D37; --line:#2E3D48; --field:#0F1A22;
   --ink:#ECEFF1; --ink-2:#AEBAC4; --ink-3:#7D8B96;
@@ -55,7 +55,7 @@
   --ocean:#101B24; --ocean-2:#0A1218; --land:#26333D; --land-line:#17232C; --coast:#38495699;
   --home:#6B3A2A; --home-line:#F0774F;
   --visited:#5E86C2; --visited-2:#4A709F; --visited-line:#7FA3D8; --planned:#3F5773;
-  --v1:#3F5E8C; --v2:#5E86C2; --v3:#8FB4E6;
+  --v1:#37527A; --v2:#4E74AB; --v3:#6E9AD4; --v4:#9CBFEC;
   --pin:#ECEFF1; --pin-ring:#17232C; --pin-side:#AEBAC4;
   --surface:#17232C; --surface-2:#1F2D37; --line:#2E3D48; --field:#0F1A22;
   --ink:#ECEFF1; --ink-2:#AEBAC4; --ink-3:#7D8B96;
@@ -71,7 +71,7 @@
   --ocean:#F7D9E1; --ocean-2:#F1C7D3; --land:#FFF8F2; --land-line:#FFFFFF; --coast:#FFFFFF;
   --home:#FFC9D6; --home-line:#B8305E;
   --visited:#D6336C; --visited-2:#E8558A; --visited-line:#A31D50; --planned:#F2A5BC;
-  --v1:#E86B95; --v2:#D6336C; --v3:#98183F;
+  --v1:#F09CB8; --v2:#E2618F; --v3:#C42A62; --v4:#8E1440;
   --pin:#3B1F33; --pin-ring:#FFF6F7; --pin-side:#9C6A80;
   --surface:#FFF6F7; --surface-2:#FCE7EC; --line:#F3D3DB; --field:#FFFFFF;
   --ink:#3B1F33; --ink-2:#8A5F73; --ink-3:#B48FA0;
@@ -134,9 +134,22 @@ label.fl{display:block;font-size:13px;font-weight:600;color:var(--ink-2);margin:
 .btn.danger{background:transparent;border:1px solid var(--danger);color:var(--danger)}
 .btn:disabled{opacity:.5;cursor:default}
 .chips{display:flex;flex-wrap:wrap;gap:8px}
-.chip{display:inline-flex;align-items:center;gap:7px;padding:6px 12px 6px 6px;border-radius:999px;border:1px solid var(--line);color:var(--ink-2);font-size:14px;font-weight:500}
-.chip[aria-pressed="true"]{border-color:transparent;background:var(--surface-2);color:var(--ink)}
-.chip .av{width:24px;height:24px;font-size:11px}
+/* Ivald och urvald resenär ska gå att skilja åt på en armlängds avstånd, och
+   inte bara på färg: den ivalda har personens färg i kanten, full styrka och en
+   bock. Den urvalda är grå, tonad och har tom ring. */
+.chip{display:inline-flex;align-items:center;gap:7px;padding:5px 8px 5px 5px;border-radius:999px;
+  border:1.5px solid var(--line);background:var(--surface);color:var(--ink-3);font-size:14px;font-weight:500;
+  transition:border-color .12s,background .12s,color .12s,opacity .12s}
+.chip[aria-pressed="false"]{opacity:.7}
+.chip .av{width:24px;height:24px;font-size:11px;filter:grayscale(1);opacity:.45}
+.chip .tick{display:grid;place-items:center;width:18px;height:18px;border-radius:50%;flex:none;
+  border:1.5px solid var(--line);background:transparent}
+.chip .tick svg{display:none;width:11px;height:11px;stroke:var(--surface);fill:none;stroke-width:3.2;stroke-linecap:round;stroke-linejoin:round}
+.chip[aria-pressed="true"]{opacity:1;color:var(--ink);font-weight:600;background:var(--surface-2);
+  border-color:var(--pc,var(--accent));box-shadow:inset 0 0 0 1px var(--pc,var(--accent))}
+.chip[aria-pressed="true"] .av{filter:none;opacity:1}
+.chip[aria-pressed="true"] .tick{background:var(--pc,var(--accent));border-color:var(--pc,var(--accent))}
+.chip[aria-pressed="true"] .tick svg{display:block}
 .chip.plain{padding:6px 12px}
 .check{display:flex;align-items:center;gap:9px;font-size:14px;cursor:pointer}
 .check input{width:18px;height:18px;accent-color:var(--accent);margin:0}
@@ -153,7 +166,7 @@ label.fl{display:block;font-size:13px;font-weight:600;color:var(--ink-2);margin:
 #map .land{fill:var(--land);stroke:var(--land-line)}
 #map .land.home{fill:var(--home);stroke:var(--home-line)}
 #map .land.visited{stroke:var(--visited-line)}
-#map .land.v1{fill:var(--v1)} #map .land.v2{fill:var(--v2)} #map .land.v3{fill:var(--v3)}
+#map .land.v1{fill:var(--v1)} #map .land.v2{fill:var(--v2)} #map .land.v3{fill:var(--v3)} #map .land.v4{fill:var(--v4)}
 #map .land.planned{fill:url(#hatch)}
 #map .land.hit{cursor:pointer}
 #map .link{fill:none;stroke:var(--pin-side);stroke-dasharray:3 3}
@@ -229,7 +242,7 @@ body.no-top #view-settings{padding-top:calc(12px + env(safe-area-inset-top,0px))
 .legend .l-ramp i:first-of-type{margin-left:6px;border-radius:3px 0 0 3px}
 .legend .l-ramp i:last-of-type{border-radius:0 3px 3px 0}
 .legend .l-ramp em{font-style:normal;margin-left:7px;color:var(--ink-3);font-size:11px}
-.legend .l-v1{background:var(--v1)} .legend .l-v2{background:var(--v2)} .legend .l-v3{background:var(--v3)}
+.legend .l-v1{background:var(--v1)} .legend .l-v2{background:var(--v2)} .legend .l-v3{background:var(--v3)} .legend .l-v4{background:var(--v4)}
 #pickbar{position:absolute;left:calc(16px + env(safe-area-inset-left,0px));right:calc(16px + env(safe-area-inset-right,0px));bottom:16px;display:flex;align-items:center;gap:10px;background:var(--surface);border-radius:12px;padding:10px 12px;box-shadow:0 6px 24px rgba(0,0,0,.18);z-index:6}
 #pickbar span{flex:1;font-size:14px}
 
@@ -327,6 +340,17 @@ h2.sec:first-child{margin-top:8px}
 .home-badge{background:var(--home);color:var(--home-line);border:1px solid var(--home-line)}
 
 /* ---------- Resedetalj ---------- */
+/* Omslaget stort överst. Rutan har fast höjd redan innan bilden kommit, så
+   sidan inte hoppar; miniatyren på 240 px ritas uppskalad och suddig medan de
+   skarpa versionerna laddas, och blurren tas bort när den första är inne. */
+.triphero{position:relative;aspect-ratio:3/2;max-height:34vh;margin:2px 0 12px;border-radius:14px;
+  overflow:hidden;background:var(--surface-2)}
+.triphero img{display:block;width:100%;height:100%;object-fit:cover;
+  filter:blur(10px);transform:scale(1.07);transition:filter .3s ease}
+.triphero.skarp img{filter:none;transform:none}
+.triphero .spin{position:absolute;right:10px;bottom:10px;border-color:rgba(255,255,255,.45);border-top-color:#fff}
+.triphero.skarp .spin{display:none}
+@media (prefers-reduced-motion: reduce){.triphero img{transition:none}}
 .back{display:inline-flex;align-items:center;gap:6px;color:var(--ink-2);font-weight:500;padding:6px 0;margin-bottom:4px}
 .detail h2,.country h2{font-size:24px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:6px}
 .detail h2 .flag,.country h2 .flag{font-size:26px}
@@ -421,6 +445,10 @@ h2.sec:first-child{margin-top:8px}
 .country p{color:var(--ink-2);margin:4px 0 8px}
 .ctrip{border-top:1px solid var(--line);padding:12px 0}
 .ctrip:first-of-type{border-top:0}
+/* Hela kortet öppnar resan, inte bara raden längst ned */
+.ctrip[data-trip]{cursor:pointer;margin:0 -8px;padding:12px 8px;border-radius:12px}
+.ctrip[data-trip]:hover{background:var(--surface-2)}
+.ctrip[data-trip]:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
 /* Samma liggande ruta som i reselistorna, med landets flagga när resan saknar
    bild – då blir vänsterkanten rak även när bara någon resa har foton. */
 .ctrip .hdr{display:grid;grid-template-columns:96px 1fr auto;gap:0 12px;align-items:center}
@@ -490,6 +518,9 @@ h2.sec:first-child{margin-top:8px}
 .placerow .pr-main{min-width:0;display:flex;flex-direction:column;gap:6px}
 .placerow .coord{font-size:12px;color:var(--ink-3);font-variant-numeric:tabular-nums}
 .placerow .coord.missing{color:var(--danger)}
+/* Väljer man en träff är det bara koordinatraden som ändrar sig. Den får lysa
+   till ett ögonblick, annars ser trycket ut att inte ha gjort något. */
+.placerow .coord.vald{color:var(--accent);font-weight:600}
 .iconbtn.sm{width:32px;height:32px;box-shadow:none;background:var(--surface-2)}
 .iconbtn.sm svg{width:16px;height:16px}
 .searchwrap{position:relative}
@@ -579,6 +610,8 @@ h2.sec:first-child{margin-top:8px}
 #imBody{flex:1;overflow-y:auto;padding:16px 16px 24px}
 #imBody>*{max-width:760px;margin-left:auto;margin-right:auto}
 #imBody textarea{min-height:190px;font-size:16px}
+.imwarn{margin:0 0 10px;padding:9px 11px;border-radius:10px;background:var(--surface-2);
+  color:var(--ink-2);font-size:13px;border-left:3px solid var(--accent)}
 .imrow{display:grid;grid-template-columns:22px 1fr auto;gap:10px;align-items:start;
   padding:11px 0;border-bottom:1px solid var(--line)}
 .imrow:last-child{border-bottom:0}

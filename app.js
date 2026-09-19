@@ -14,7 +14,8 @@ const AUTH = {
   hash: '5805d07268265f31365760d2aa2a450e97629e0d6a43c36829b54b3d971026c7'
 };
 const LS_KEY = 'resekartan.data', LS_AUTH = 'resekartan.unlocked', LS_SEEN = 'resekartan.inloggad', LS_LEGEND = 'resekartan.legend';
-const APP_VERSION = 'v53';   // följ sw.js CACHE, så man ser vad som faktiskt körs
+const LS_FILTER = 'resekartan.filter';   // vilka resenärer som var valda sist, per enhet
+const APP_VERSION = 'v54';   // följ sw.js CACHE, så man ser vad som faktiskt körs
 
 /* ============================ Tema ============================
    Temat är per enhet och ligger i localStorage, inte i DB – Hedvig ska kunna ha
@@ -876,15 +877,20 @@ function placeLabels(u){
    Priset är att en nyans inte betyder samma sak hela tiden. Det löses genom att
    teckenförklaringen skriver ut de faktiska talen i stället för att antyda dem.
 
-   Tre steg: fler nyanser går ändå inte att skilja åt i ett litet land. */
-const heatNivå = (n, max) => max <= 1 ? 1 : 1 + Math.round((n - 1) / (max - 1) * 2);
+   Ett besök är sitt eget steg. Det absolut vanligaste är att ha varit i ett
+   land en enda gång, och slås den ettan ihop med tvåorna försvinner just den
+   skillnad man helst vill se. Resten av spannet fördelas över steg 2–4. */
+const HEAT_STEG = 4;
+const heatNivå = (n, max) => n <= 1
+  ? 1
+  : 2 + Math.min(HEAT_STEG - 2, Math.floor((n - 2) / (max - 1) * (HEAT_STEG - 1)));
 
 function legendRamp(max){
   const el = document.getElementById('legRamp');
   if(!el) return;
   el.hidden = !max;
   if(!max) return;
-  const grupper = [[], [], []];
+  const grupper = Array.from({ length: HEAT_STEG }, () => []);
   for(let n = 1; n <= max; n++) grupper[heatNivå(n, max) - 1].push(n);
   const rutor = grupper.map((g, i) => g.length ? `<i class="l-v${i + 1}"></i>` : '').join('');
   const tal = grupper.filter(g => g.length)
@@ -1027,6 +1033,24 @@ function filterLabel(){
 }
 const TICK = '<span class="tick"><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg></span>';
 
+/* Filtret ligger kvar på enheten. Hedvig vill se sina egna resor varje gång hon
+   öppnar appen, inte familjens gemensamma – och det valet ska hon bara behöva
+   göra en gång. Ingen sparad nyckel = aldrig valt, och då gäller hela familjen. */
+function sparaFilter(){
+  try { localStorage.setItem(LS_FILTER, filter.size ? [...filter].join(',') : 'alla'); } catch(e){}
+}
+function lasFilter(){
+  let v = null;
+  try { v = localStorage.getItem(LS_FILTER); } catch(e){}
+  filter.clear();
+  if(v === 'alla') return;                       // "Alla resor", inget filter
+  // Personer kan ha tagits bort sedan valet gjordes; blir inget kvar faller vi
+  // tillbaka på hela familjen i stället för på ett tomt filter som betyder allt.
+  const ids = (v || '').split(',').filter(id => family().some(p => p.id === id));
+  if(ids.length) ids.forEach(id => filter.add(id));
+  else family().forEach(p => filter.add(p.id));
+}
+
 function renderWho(){
   document.getElementById('whoLabel').textContent = filterLabel();
   /* "Alla resor" och "Hela familjen" är inte samma sak, och det var precis det
@@ -1056,6 +1080,7 @@ whoMenu.addEventListener('click', e => {
   else if(id === '*'){ filter.clear(); family().forEach(p => filter.add(p.id)); }
   else if(filter.has(id)) filter.delete(id);
   else filter.add(id);
+  sparaFilter();
   nav.length = 0;                       // historiken hör till det gamla urvalet
   sel = null; selCountry = null;
   renderWho(); drawPins(); renderSheet(); renderViews();
@@ -1263,6 +1288,9 @@ function renderTrip(t){
   const places = t.stops.flatMap(s => (s.places||[]).map(p => p.name));
   body.innerHTML = `<div class="detail">
     <button class="back" data-back>‹ Tillbaka</button>
+    ${t.thumb ? `<div class="triphero" id="triphero" data-tripid="${esc(t.id)}">
+      <img src="${esc(t.thumb)}" alt="Omslagsbild från ${esc(t.title)}">
+      <span class="spin"></span></div>` : ''}
     <h2><span class="flag">${t.stops[0] ? flagOf(t.stops[0].iso) : '🏳️'}</span>${esc(t.title)}${t.planned ? '<span class="tag">Planerad</span>' : ''}</h2>
     <div class="meta">
       ${ICON.cal}<div>${span(t.start, t.end)} <span style="color:var(--ink-3)">· ${days(t)} dagar</span></div>
@@ -1436,6 +1464,7 @@ async function loadPhotos(tripId){
     if(phTrip !== tripId) return;                 // användaren hann byta resa
     phCache = list;
     renderPhotos();
+    skarpHero(tripId, list);
     syncThumb(tripId, list);      // fyller i omslaget för gallerier som lades in före v19
     migratePhotos(tripId, list);  // och delar upp bilder som lades in före v21
   };
@@ -1457,6 +1486,8 @@ async function loadPhotos(tripId){
     visa(list);
   } catch(e){
     if(ur_cache) return;                          // vi visar redan bilderna
+    // Herobilden ska inte stå och snurra för alltid för att galleriet strulade
+    document.getElementById('triphero')?.classList.add('skarp');
     const box = document.getElementById('phBody');
     if(phTrip !== tripId || !box) return;
     box.innerHTML = `<p class="ph-empty">${
@@ -1469,6 +1500,31 @@ async function loadPhotos(tripId){
     <div class="actions" style="margin-top:10px"><button class="btn" id="phRetry">Försök igen</button></div>
     <div class="grid-ph" style="margin-top:12px">${addTile}</div>`;
   }
+}
+
+/* Herobilden skärps i två steg. Miniatyren som ligger på resan (~5 kB) ritas
+   direkt, uppskalad och suddig, så rutan aldrig står tom och sidan inte hoppar.
+   Sedan byts den mot galleriets förhandsbild på 400 px – den är redan hämtad –
+   och till sist mot originalet på 1400 px, som hämtas först när galleriet är
+   uppritat så det inte konkurrerar med det man faktiskt tittar på. */
+async function skarpHero(tripId, list){
+  const box = document.getElementById('triphero');
+  if(!box || box.dataset.tripid !== tripId) return;
+  const img = box.querySelector('img'), p = list[0];
+  if(!p){ box.remove(); return; }                 // sista bilden togs bort
+  const byt = async url => {
+    if(!url) return;
+    const n = new Image();
+    n.src = url;
+    try { await n.decode(); } catch(e){ return; }
+    if(!img.isConnected || box.dataset.tripid !== tripId) return;
+    img.src = url;
+  };
+  await byt(p.prev || p.url);
+  box.classList.add('skarp');
+  const full = () => loadFull(p).then(byt).catch(() => {});
+  if(p.url || fullCache.has(p.id)) full();
+  else setTimeout(() => { if(box.dataset.tripid === tripId) full(); }, 500);
 }
 
 const phInput = document.getElementById('phInput');
@@ -1902,28 +1958,50 @@ function renderCountry(iso){
   setSheet(.5);
   const home = isHome(iso), groups = stopsIn(iso);
   const places = new Set();
-  groups.forEach(({ st }) => (st.places||[]).forEach(p => places.add(p.name)));
+  // Bara gjorda resor räknas – en planerad resa har vi inte varit på än
+  groups.forEach(({ t, st }) => { if(!t.planned) (st.places||[]).forEach(p => places.add(p.name)); });
   const n = groups.filter(g => !g.t.planned).length;
   const planned = groups.length - n;
+  /* Att söka fram Kirgizistan och mötas av "inget inlagt" är fel svar när det
+     finns en resa dit – den råkar bara ligga utanför filtret. Då listas den
+     ändå, med vilka som var med, så man ser vad som gömmer sig. */
+  const dolda = groups.length
+    ? []
+    : [...DB.trips].filter(t => t.stops.some(st => st.iso === iso)).sort(byDateDesc);
   const sum = n
     ? `${n} ${n === 1 ? 'resa' : 'resor'} · ${places.size} ${places.size === 1 ? 'plats' : 'platser'}`
     : planned
       ? `${planned} planerad ${planned === 1 ? 'resa' : 'resor'} – inte varit här än`
-      : 'Inget inlagt ännu.';
+      : dolda.length
+        ? `${dolda.length} ${dolda.length === 1 ? 'resa' : 'resor'} hit, men ingen som passar filtret`
+        : 'Inget inlagt ännu.';
   body.innerHTML = `<div class="country">
     <button class="back" data-back>‹ Tillbaka</button>
     <h2><span class="flag">${flagOf(iso)}</span>${esc(countryName(iso))}${home ? '<span class="tag home-badge">Hemma</span>' : ''}</h2>
     <p>${sum}${home && DB.home.place ? ` · vi bor i ${esc(DB.home.place.name)}` : ''}</p>
-    ${groups.map(({ t, st }) => `<div class="ctrip">
+    ${groups.map(({ t, st }) => `<div class="ctrip" data-trip="${esc(t.id)}" role="button" tabindex="0">
       <div class="hdr">
         ${t.thumb ? `<span class="thumb"><img src="${t.thumb}" alt=""></span>` : `<span class="flag">${flagOf(st.iso)}</span>`}
         <span><b>${esc(t.title)}</b>${t.planned ? '<span class="tag">Planerad</span>' : ''}${st.side ? '<span class="tag side">Avstickare</span>' : ''}
         <span class="when">${span(stopStart(t, st), stopEnd(t, st))}</span></span>${avs(stopWho(t, st))}</div>
       <ul>${(st.places||[]).map(p => `<li${home ? ' class="home-city"' : ''}><div><b>${esc(p.name)}</b>${p.what ? ` <span>— ${esc(p.what)}</span>` : ''}</div></li>`).join('')}</ul>
-      <button class="more" data-trip="${esc(t.id)}">Visa hela resan ›</button>
-    </div>`).join('') || '<p class="example">Inga resor hit med det här filtret.</p>'}
+      <span class="more">Visa hela resan ›</span>
+    </div>`).join('') || (dolda.length
+      ? `<p class="example">Filtret står på <b>${esc(filterLabel())}</b>, och ingen av resorna hit matchar det.
+           Byt i toppraden för att se dem på kartan – eller öppna dem här:</p>
+         ${dolda.map(tripRow).join('')}`
+      : '<p class="example">Inga resor hit ännu.</p>')}
   </div>`;
 }
+
+// Hela kortet i landvyn är klickbart, inte bara "Visa hela resan"
+document.addEventListener('keydown', e => {
+  if(e.key !== 'Enter' && e.key !== ' ') return;
+  const c = e.target.closest?.('.ctrip[data-trip]');
+  if(!c) return;
+  e.preventDefault();
+  showTrip(c.dataset.trip);
+});
 
 document.addEventListener('click', e => {
   const tr = e.target.closest('[data-trip]');
@@ -2483,6 +2561,7 @@ function openEditor(id){
   }
   document.getElementById('edTitle').textContent = t ? 'Ändra resa' : 'Ny resa';
   editor.hidden = false;
+  edBody.scrollTop = 0;                 // en ny redigering börjar överst
   renderEditor();
   if(edStep === 'country') setTimeout(() => document.getElementById('cSearch')?.focus(), 60);
 }
@@ -2517,7 +2596,7 @@ document.getElementById('edClose').onclick = edBack;
 document.getElementById('edCancel').onclick = edBack;
 
 function whoPicker(selected, name){
-  const chip = p => `<button type="button" class="chip" data-who="${name}" data-id="${esc(p.id)}" aria-pressed="${selected.includes(p.id)}">${av(p.id)}${esc(p.name)}</button>`;
+  const chip = p => `<button type="button" class="chip" data-who="${name}" data-id="${esc(p.id)}" style="--pc:${personColor(p.id)}" aria-pressed="${selected.includes(p.id)}">${av(p.id)}${esc(p.name)}${TICK}</button>`;
   const g = guests();
   return `<div class="chips">${family().map(chip).join('')}</div>
     ${g.length ? `<div class="chips" style="margin-top:8px">${g.map(chip).join('')}</div>` : ''}
@@ -2530,6 +2609,9 @@ function renderEditor(){
   document.getElementById('edCancel').textContent = edStep === 'country' ? 'Avbryt' : 'Avbryt';
   if(edStep === 'country') return renderCountryStep(edBody.querySelector('#cSearch')?.value || '');
 
+  // Att skriva om innehållet nollställer skrollningen. Står man långt ned bland
+  // platserna ska en omritning inte kasta upp en till titelfältet igen.
+  const kvar = edBody.scrollTop;
   edBody.innerHTML = `
     <div class="field"><label class="fl" for="fTitle">Vad kallar vi resan?</label>
       <input type="text" id="fTitle" value="${esc(draft.title)}" placeholder="t.ex. Italien eller Sportlovet i Åre"></div>
@@ -2554,6 +2636,7 @@ function renderEditor(){
       <button type="button" class="btn ghost" data-addstop="1">+ Avstickare</button>
     </div>
     ${editingId ? `<div class="actions"><button type="button" class="btn danger" data-del="${esc(editingId)}">Ta bort resan</button></div>` : ''}`;
+  edBody.scrollTop = kvar;
 }
 
 function stopCard(s, i){
@@ -2798,21 +2881,68 @@ edBody.addEventListener('click', e => {
     draft.stops[i].places.splice(j, 1);
     return renderEditor();
   }
-  const hit = t.closest('[data-hit]');
-  if(hit){
-    const ref = hit.closest('.results').dataset.results;
-    const [i, j] = ref.split('.').map(Number);
-    const [lat, lon] = hit.dataset.hit.split(',').map(Number);
-    readDraft();
-    Object.assign(draft.stops[i].places[j], { lat, lon, name: hit.dataset.name || draft.stops[i].places[j].name });
-    clearFormError();
-    return renderEditor();
-  }
   const find = t.closest('[data-find]');
   if(find){ readDraft(); return searchPlace(find.dataset.find); }
   const pick = t.closest('[data-pick]');
   if(pick){ readDraft(); return startPick(pick.dataset.pick); }
 });
+
+/* ---- Att välja en träff i ortsökningen ----
+   Två saker gjorde att ett tryck på en träff kunde se ut att inte göra något:
+
+   1. Valet ritade om hela formuläret, och då nollställs `edBody.scrollTop`.
+      Står man långt ned bland platserna kastas man upp till titelfältet i
+      samma ögonblick, och det syns aldrig att positionen faktiskt kom in.
+   2. Valet skedde på `click`. På iPhone hinner fältet tappa fokus och
+      tangentbordet stängas mellan tryck och klick, och då flyttar listan sig
+      under fingret.
+
+   Nu väljs träffen på `pointerup` – med `preventDefault` på `pointerdown` så
+   fokus ligger kvar – och bara den berörda raden ritas om. Rör sig fingret mer
+   än tio punkter var det en skrollning i listan, inte ett val. */
+function valjTraff(hit){
+  const box = hit.closest('[data-results]');
+  if(!box || !draft) return;
+  const [i, j] = box.dataset.results.split('.').map(Number);
+  const [lat, lon] = String(hit.dataset.hit || '').split(',').map(Number);
+  if(!draft.stops[i]?.places[j] || !isFinite(lat) || !isFinite(lon)) return;
+  clearTimeout(searchTimer); searchSeq++;   // ett svar på väg in ska inte fälla ut listan igen
+  readDraft();
+  Object.assign(draft.stops[i].places[j], { lat, lon, name: hit.dataset.name || draft.stops[i].places[j].name });
+  clearFormError();
+  fyllPlatsrad(i, j);
+}
+
+let traffNed = null;
+edBody.addEventListener('pointerdown', e => {
+  const hit = e.target.closest('[data-hit]');
+  if(!hit) return;
+  e.preventDefault();                       // behåll fokus, stäng inte tangentbordet
+  traffNed = { hit, x: e.clientX, y: e.clientY };
+});
+edBody.addEventListener('pointerup', e => {
+  const ned = traffNed; traffNed = null;
+  if(!ned || e.target.closest('[data-hit]') !== ned.hit) return;
+  if(Math.hypot(e.clientX - ned.x, e.clientY - ned.y) > 10) return;   // en skrollning i listan
+  valjTraff(ned.hit);
+});
+edBody.addEventListener('pointercancel', () => { traffNed = null; });
+
+function fyllPlatsrad(i, j){
+  const row = edBody.querySelector(`[data-place="${i}.${j}"]`);
+  if(!row) return renderEditor();
+  const p = draft.stops[i].places[j];
+  const namn = row.querySelector(`[data-pname="${i}.${j}"]`);
+  if(namn) namn.value = p.name;
+  const box = row.querySelector('[data-results]');
+  if(box){ box.hidden = true; box.innerHTML = ''; }
+  const coord = row.querySelector('.coord');
+  if(coord){
+    coord.className = 'coord vald';
+    coord.textContent = `${p.lat.toFixed(3)}, ${p.lon.toFixed(3)}`;
+    setTimeout(() => coord.classList.remove('vald'), 900);
+  }
+}
 
 edBody.addEventListener('input', e => {
   const pn = e.target.closest('[data-pname]');
@@ -2919,6 +3049,24 @@ document.getElementById('edSave').onclick = () => {
 const SEARCH_MIN = 2, SEARCH_WAIT = 450;
 let searchTimer = null, searchSeq = 0;
 
+/* Typen som står i grått bakom namnet. Rå OSM-engelska ("administrative")
+   ser ut som ett fel och fick oss att tro att sådana träffar saknade position –
+   de gör de inte, det är så Nominatim märker en stad som är en kommungräns. */
+const PLATSTYP = {
+  administrative:'kommun', municipality:'kommun', county:'län', district:'distrikt',
+  city:'stad', town:'ort', village:'by', hamlet:'liten by', locality:'plats',
+  suburb:'stadsdel', borough:'stadsdel', neighbourhood:'kvarter', quarter:'kvarter',
+  state:'delstat', province:'provins', region:'region', continent:'kontinent', country:'land',
+  island:'ö', islet:'liten ö', archipelago:'skärgård', peninsula:'halvö', cape:'udde',
+  peak:'bergstopp', volcano:'vulkan', valley:'dal', glacier:'glaciär', desert:'öken',
+  lake:'sjö', river:'flod', bay:'vik', beach:'strand', water:'vatten',
+  national_park:'nationalpark', nature_reserve:'naturreservat', park:'park',
+  airport:'flygplats', aerodrome:'flygplats', train_station:'järnvägsstation', station:'station',
+  attraction:'sevärdhet', museum:'museum', hotel:'hotell', farm:'gård', isolated_dwelling:'gård',
+  safety_region:'område', city_block:'kvarter'
+};
+const platstyp = k => PLATSTYP[k] || (k ? String(k).replace(/_/g, ' ') : '');
+
 function normPhoton(f){
   const p = f.properties, c = f.geometry?.coordinates;
   if(!c) return null;
@@ -2955,6 +3103,9 @@ async function geocode(q, cc){
   const seen = new Set();
   return hits.filter(h => {
     if(!h.name) return false;
+    // En träff utan position går inte att välja. Bättre att den aldrig syns än
+    // att ett tryck på den ser ut att inte göra något.
+    if(!isFinite(h.lat) || !isFinite(h.lon)) return false;
     const key = h.lat.toFixed(2) + ',' + h.lon.toFixed(2);
     if(seen.has(key)) return false;
     seen.add(key);
@@ -2983,7 +3134,7 @@ function searchPlace(ref, q){
     }
     box.innerHTML = hits.map(h =>
       `<button type="button" data-hit="${h.lat},${h.lon}" data-name="${esc(h.name)}">${esc(h.name)}${
-        h.kind ? ` <span style="color:var(--ink-3);font-size:12px">${esc(h.kind)}</span>` : ''
+        h.kind ? ` <span style="color:var(--ink-3);font-size:12px">${esc(platstyp(h.kind))}</span>` : ''
       }<small>${esc(h.label)}</small></button>`).join('');
   }).catch(() => {
     if(seq !== searchSeq) return;
@@ -2992,10 +3143,12 @@ function searchPlace(ref, q){
   });
 }
 
+let pickScroll = 0;
 function startPick(ref){
   pickTarget = ref;
   const [i, j] = ref.split('.').map(Number);
   const stop = draft.stops[i];
+  pickScroll = edBody.scrollTop;   // display:none nollställer den, så spara undan
   editor.hidden = true;
   setTab('karta');
   document.getElementById('pickbar').hidden = false;
@@ -3015,6 +3168,7 @@ function stopPick(){
   document.getElementById('pickbar').hidden = true;
   document.getElementById('map').classList.remove('picking');
   editor.hidden = false;
+  edBody.scrollTop = pickScroll;
   renderEditor();
 }
 document.getElementById('pickCancel').onclick = stopPick;
@@ -3152,6 +3306,7 @@ document.getElementById('imClose').onclick = closeImport;
 function renderImport(){
   const err = document.getElementById('imErr');
   err.hidden = true;
+  document.getElementById('imNext').disabled = false;
   document.getElementById('imTitle').textContent = imStep === 'paste' ? 'Importera resor' : 'Granska innan de läggs in';
   document.getElementById('imBack').textContent = imStep === 'paste' ? 'Avbryt' : 'Tillbaka';
   document.getElementById('imNext').textContent = imStep === 'paste' ? 'Tolka raderna' : 'Lägg in valda';
@@ -3188,10 +3343,20 @@ Sommar i Grekland juli 2022"></textarea></div>
     return;
   }
 
+  if(!imRows) return;                       // rutan hann stängas mitt i uppslagningen
   const ok = imRows.filter(r => r.use).length;
+  const vantar = imRows.some(r => r.pending);
+  const hittade = imRows.filter(r => r.places.length).length;
+  /* Knappen är låst medan orterna slås upp. Trycktes den tidigare sparades bara
+     de rader som hunnit bli klara, och resten försvann utan att något sa ifrån. */
+  document.getElementById('imNext').disabled = vantar;
   imBody.innerHTML = `
     <p class="imsum">${imRows.length} rader · ${ok} valda${
-      imRows.some(r => r.pending) ? ' <span class="spin"></span> slår upp orter …' : ''}</p>
+      vantar ? ' <span class="spin"></span> slår upp orter …' : ''}</p>${
+    !vantar && hittade > ok
+      ? `<p class="imwarn">${hittade - ok} ${hittade - ok === 1 ? 'rad hittade en ort men saknar datum' : 'rader hittade en ort men saknar datum'} –
+         kryssa i dem här om du vill lägga in dem ändå och fylla i datum efteråt.</p>`
+      : ''}
     <div>${imRows.map((r, i) => {
       const bad = !r.places.length;
       return `<label class="imrow${bad ? ' bad' : ''}">
@@ -3245,27 +3410,33 @@ document.getElementById('imNext').onclick = async () => {
   const chosen = imRows.filter(r => r.use && r.places.length);
   if(!chosen.length){ err.textContent = 'Kryssa i minst en resa.'; err.hidden = false; return; }
   const today = new Date().toISOString().slice(0, 10);
-  chosen.forEach(r => {
-    DB.trips.push({
-      id: 't' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
-      title: r.title || r.places[0].name,
-      start: r.start, end: r.end,
-      who: r.who && r.who.length ? r.who : family().map(p => p.id),
-      planned: r.start > today,
-      note: '',
-      link: r.link || '',
-      stops: [{ iso: r.iso, places: r.places.map(p => ({ name: p.name, lat: p.lat, lon: p.lon, what: '' })) }]
-    });
-  });
+  const nya = chosen.map(r => ({
+    id: 't' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+    title: r.title || r.places[0].name,
+    start: r.start, end: r.end,
+    who: r.who && r.who.length ? r.who : family().map(p => p.id),
+    planned: !!r.start && r.start > today,
+    note: '',
+    link: r.link || '',
+    stops: [{ iso: r.iso, places: r.places.map(p => ({ name: p.name, lat: p.lat, lon: p.lon, what: '' })) }]
+  }));
+  DB.trips.push(...nya);
   saveDB();
   closeImport();
   refreshAll();
-  toast(chosen.length === 1 ? '1 resa inlagd.' : `${chosen.length} resor inlagda.`);
+  // "Resan sparades inte" är oftast "resan sparades men filtret döljer den":
+  // en rad med -TA blir en resa där bara två var med, och då syns den inte
+  // under Hela familjen.
+  const gomda = nya.filter(t => !t.stops.some(st => inFilter(t, st))).length;
+  toast((nya.length === 1 ? '1 resa inlagd.' : `${nya.length} resor inlagda.`)
+    + (gomda ? ` ${gomda} av dem döljs av filtret ${filterLabel()}.` : ''));
 };
 
 /* Slå upp en rad i taget – geokodarna är gratis och ska inte översvämmas */
 async function lookupRows(){
-  for(const r of imRows){
+  const mina = imRows;
+  for(const r of mina){
+    if(imRows !== mina) return;          // rutan stängdes, eller raderna byttes ut
     r.missing = [];
     const queries = (r.names && r.names.length ? r.names : [r.title]).filter(Boolean);
     for(const q of queries){
@@ -3281,11 +3452,16 @@ async function lookupRows(){
           } else r.missing.push(q);
         } else r.missing.push(q);
       } catch(e){ r.missing.push(q); }
+      if(imRows !== mina) return;
       renderImport();
       await new Promise(res => setTimeout(res, 1100));   // Nominatim: max 1/sek
+      if(imRows !== mina) return;
     }
-    // Förkryssa bara rader som blev kompletta
-    if(r.places.length && r.hasDate && !r.missing.length) r.use = true;
+    /* Kryssa i allt som fick en position och ett datum. Förut krävdes dessutom
+       att varje ort på raden hittades, och en rad som såg alldeles färdig ut i
+       granskningen kunde ändå ligga okryssad – då sparades den inte, och det
+       syntes ingenstans. Saknade orter står som "hittade inte" på raden. */
+    if(r.places.length && r.start) r.use = true;
     r.pending = false;
     renderImport();
   }
@@ -3316,10 +3492,9 @@ function normaliseDB(){
 function start(){
   if(!CLOUD.on) DB = loadDB();
   normaliseDB();
-  // Kartan utgår från familjens gemensamma resor. Enskildas resor finns kvar
-  // ett tryck bort i väljaren, under Alla resor.
-  filter.clear();
-  family().forEach(p => filter.add(p.id));
+  // Kartan utgår från familjens gemensamma resor, men har någon valt något
+  // annat på den här enheten gäller det valet i stället.
+  lasFilter();
   cloudDot(CLOUD.on ? 'on' : '', CLOUD.on ? 'Synkad med familjens data' : '');
   renderWho(); layout(); renderSheet(); renderViews();
   addEventListener('resize', layout);
