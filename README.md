@@ -254,6 +254,35 @@ pan-y` på ytan hindrar webbläsaren från att tolka svepet som sitt eget bakåt
 skede kan svälja den, så en timeout på 450 ms städar upp. Med `prefers-reduced-motion`
 byts bilden rakt av utan glid.
 
+### Svep ned för att stänga, svep höger för att gå tillbaka
+
+Två gester med Flippas trösklar, som redan är tunade där:
+
+| Gest | Var | Tröskel |
+| --- | --- | --- |
+| ned | bildvisaren | 55 punkter **eller** en knyck på 0,45 punkter/ms |
+| höger | arket | 70 punkter |
+
+Riktningen avgörs på de första punkterna med **1,3 gångers övervikt** åt det ena
+hållet, så en skrollning eller ett lätt snedsvep inte råkar räknas. Svepet nedåt
+finns bara när bilden inte är inzoomad – då panorerar ett finger i stället.
+
+Tre fällor, alla lärda i Flippa:
+
+- **Beslutet måste kunna tas vid släppet.** Ett riktigt snabbt svep kan ge noll
+  `pointermove`, och då hände ingenting alls. `avgor()` anropas därför både under
+  rörelsen och i `pointerup`.
+- **`pointercancel` räknas.** Webbläsaren tar ibland över gesten; sista kända
+  position används, eftersom cancel-händelsens egna koordinater inte är att lita
+  på.
+- **Klicket efter svepet måste sväljas.** Annars öppnar samma rörelse resan man
+  svepte över. En vakt i capture-fasen sväljer klick i 400 ms.
+
+En fälla till, egen den här gången: `svepTillbaka()` anropades med `body`-
+konstanten, som deklareras längre ned i filen. Det gav *Cannot access 'body'
+before initialization* och fällde hela `app.js` tyst – kartan blev vit. Elementet
+hämtas nu direkt ur sidan i stället.
+
 **Att ta bort en bild sker bara i helskärmsläget.** Kryssen i rutnätet togs bort:
 man raderar sällan, och de gjorde att man inte vågade trycka på bilderna.
 
@@ -508,6 +537,14 @@ Vi kör på **800**, den mest sanningsenliga: en resa till Kuala Lumpur färgar 
 Borneo och en resa till Tokyo färgar inte Okinawa. Känns det snålt är 1 500 nästa
 steg – det är en siffra på en rad. 2 500 och 3 000 ger samma utfall, så där ligger
 en naturlig lucka i datat om man vill ha en försiktig gräns.
+
+### Resdagar per år börjar med i år
+
+Stapeldiagrammet i statistiken har senaste året till vänster och äldre år bort åt
+höger. Det man vill se först ska inte ligga sist.
+
+Raden skrollar i sidled i stället för att klämma ihop sig: varje år har en
+golvbredd på 34 punkter, för med tjugo år i listan blev staplarna annars streck.
 
 ### Färgskalan på kartan
 
@@ -973,9 +1010,13 @@ hopfälld längst ned:
 1. **Notiser** – är de av visas en inbjudan i stället för en kryssruta bland andra.
    Funktionen är svår att upptäcka och lätt att vilja ha.
 2. **Utseende**
-3. **Hemort**, **Resenärer** – sätts en gång och rörs sällan
-4. **Avancerat och felsökning** (`<details>`, hopfälld) – version, lagring,
+3. **Hemort** och **Resenärer**, var sin hopfälld `<details>` – sätts en gång och
+   rörs sällan
+4. **Avancerat och felsökning**, också hopfälld – version, lagring,
    säkerhetskopia, lösenord, logga ut, hämta senaste versionen
+
+De hopfällda avsnitten använder sammanfattningsraden som rubrik, så ingen extra
+`h2` behövs inuti.
 
 Rutan blandade förut notiser och tema med säkerhetskopior och lösenordshashar, och
 då hittar man ingetdera. Säkerhetskopian – hela datat som text att kopiera undan

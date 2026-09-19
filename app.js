@@ -15,7 +15,7 @@ const AUTH = {
 };
 const LS_KEY = 'resekartan.data', LS_AUTH = 'resekartan.unlocked', LS_SEEN = 'resekartan.inloggad', LS_LEGEND = 'resekartan.legend';
 const LS_FILTER = 'resekartan.filter';   // vilka resenärer som var valda sist, per enhet
-const APP_VERSION = 'v72';   // följ sw.js CACHE, så man ser vad som faktiskt körs
+const APP_VERSION = 'v73';   // följ sw.js CACHE, så man ser vad som faktiskt körs
 
 /* ============================ Tema ============================
    Temat är per enhet och ligger i localStorage, inte i DB – Hedvig ska kunna ha
@@ -1168,6 +1168,61 @@ svg.on('click', () => { if(!pickTarget) clearSel(); });
 d3.select('#zin').on('click', () => ease(svg).call(zoom.scaleBy, 1.6));
 d3.select('#zout').on('click', () => ease(svg).call(zoom.scaleBy, 1/1.6));
 
+/* ---- Svep tillbaka ----
+   Ett höger-svep i arket går ett steg bakåt, precis som Tillbaka-knappen.
+   Trösklarna är Flippas: riktningen avgörs på tio punkter med 1,3 gångers
+   övervikt så en skrollning inte råkar räknas, och svepet måste nå 70 punkter.
+
+   Två saker som är lätta att missa:
+   - Beslutet måste kunna tas **vid släppet** också. Ett riktigt snabbt svep kan
+     ge noll pointermove, och då hände ingenting alls.
+   - Klicket efter svepet måste sväljas, annars öppnar samma rörelse resan man
+     svepte över. */
+let svepVakt = false;
+document.addEventListener('click', e => {
+  if(svepVakt){ e.stopPropagation(); e.preventDefault(); }
+}, true);
+
+function svepTillbaka(el, garAttGaBak){
+  let sx = 0, sy = 0, lx = 0, ly = 0, foljer = false, klart = false, isidled = false;
+  const avgor = (x, y) => {
+    if(klart) return;
+    const dx = x - sx, dy = y - sy;
+    if(Math.abs(dx) < 10 && Math.abs(dy) < 10) return;
+    klart = true;
+    isidled = dx > 0 && Math.abs(dx) > Math.abs(dy) * 1.3;
+    if(!isidled) foljer = false;          // uppåt, nedåt eller vänster: inte vår gest
+  };
+  el.addEventListener('pointerdown', e => {
+    if((e.button ?? 0) > 0 || !garAttGaBak()) return;
+    sx = lx = e.clientX; sy = ly = e.clientY;
+    foljer = true; klart = false; isidled = false;
+  });
+  el.addEventListener('pointermove', e => {
+    if(!foljer) return;
+    lx = e.clientX; ly = e.clientY;
+    avgor(lx, ly);
+  });
+  const slut = (x, y) => {
+    if(!foljer) return;
+    avgor(x, y);                          // hann ingen rörelse avgöra: gör det nu
+    const ok = foljer && isidled && (x - sx) > 70 && !phDrag.on;
+    foljer = false;
+    if(!ok) return;
+    svepVakt = true;
+    setTimeout(() => { svepVakt = false; }, 400);
+    goBack();
+  };
+  el.addEventListener('pointerup', e => slut(e.clientX, e.clientY));
+  // pointercancel = webbläsaren tog gesten. Sista kända läget gäller; cancel-
+  // händelsens egna koordinater är inte att lita på.
+  el.addEventListener('pointercancel', () => slut(lx, ly));
+}
+/* Elementet hämtas direkt ur sidan, inte via `body`-konstanten. Den deklareras
+   längre ned i filen, och att röra den härifrån gav "Cannot access 'body'
+   before initialization" – hela app.js föll, tyst. */
+svepTillbaka(document.getElementById('sheetBody'), () => !!(sel || selCountry || selArsdag));
+
 /* ============================ Filter ============================ */
 const whoBtn = document.getElementById('whoBtn');
 const whoMenu = document.getElementById('whoMenu');
@@ -1986,7 +2041,12 @@ function openViewer(i){
   if(!phCache[i]) return;
   vIdx = i; viewerEl.hidden = false; paintViewer();
 }
-function closeViewer(){ viewerEl.hidden = true; nollstallZoom(false); kanskeLaddaOm(); }
+function closeViewer(){
+  viewerEl.hidden = true;
+  nollstallZoom(false);
+  if(vNed || viewerEl.style.opacity) nollstallNed(false);
+  kanskeLaddaOm();
+}
 /* Originalen för den här sessionen. Bläddrar man fram och tillbaka ska samma
    bild inte hämtas om. */
 const fullCache = new Map();
@@ -2209,6 +2269,29 @@ function zoomaTill(k, ankare, fran){
   klampaZoom();
 }
 
+/* ---- Svep ned för att stänga ----
+   Samma avvägning som Flippas ark: 55 punkters drag räcker, och en snabb knyck
+   nedåt (0,45 punkter per millisekund) räcker ännu tidigare. Riktningen avgörs
+   på sex punkters rörelse med 1,3 gångers övervikt, så ett lätt snedsvep i
+   sidled fortfarande bläddrar. Gesten finns bara när bilden inte är inzoomad –
+   då panorerar ett finger i stället. */
+let vNed = null;
+function visaNed(dy){
+  const spar = vTrack();
+  if(spar) spar.style.transform = `translateY(${dy}px)`;
+  viewerEl.style.opacity = String(Math.max(.25, 1 - dy / 420));
+}
+function nollstallNed(mjukt){
+  vNed = null;
+  const spar = vTrack();
+  if(spar){
+    spar.style.transition = mjukt && !calm.matches ? 'transform .22s ease' : 'none';
+    spar.style.transform = '';
+    if(mjukt) setTimeout(() => { const t = vTrack(); if(t) t.style.transition = ''; }, 240);
+  }
+  viewerEl.style.opacity = '';
+}
+
 viewerEl.addEventListener('pointerdown', e => {
   if(slideBusy || e.target.closest('.vbtn')) return;
   pekare.set(e.pointerId, { x: e.clientX, y: e.clientY });
@@ -2227,7 +2310,8 @@ viewerEl.addEventListener('pointerdown', e => {
     panorering = { x: e.clientX, y: e.clientY, ox: bildZoom.x, oy: bildZoom.y };
     return;
   }
-  vDrag = { x: e.clientX, w: viewerEl.clientWidth || 1, dx: 0, rör: false };
+  vDrag = { x: e.clientX, y: e.clientY, w: viewerEl.clientWidth || 1, dx: 0, rör: false,
+            riktning: null, dy: 0, lastY: e.clientY, lastT: performance.now(), vy: 0 };
 });
 
 viewerEl.addEventListener('pointermove', e => {
@@ -2249,9 +2333,21 @@ viewerEl.addEventListener('pointermove', e => {
     return visaZoom(false);
   }
   if(!vDrag) return;
-  const dx = e.clientX - vDrag.x;
+  const dx = e.clientX - vDrag.x, dny = e.clientY - vDrag.y;
+  if(!vDrag.riktning){
+    if(Math.abs(dx) < 6 && Math.abs(dny) < 6) return;
+    // Nedåt med tydlig övervikt = stäng, allt annat = bläddra
+    vDrag.riktning = (dny > 0 && Math.abs(dny) > Math.abs(dx) * 1.3) ? 'ned' : 'sida';
+    if(vDrag.riktning === 'ned'){ vNed = vDrag; vTrack().classList.add('dragging'); }
+  }
+  if(vDrag.riktning === 'ned'){
+    const nu = performance.now();
+    if(nu > vDrag.lastT) vDrag.vy = (e.clientY - vDrag.lastY) / (nu - vDrag.lastT);
+    vDrag.lastY = e.clientY; vDrag.lastT = nu;
+    vDrag.dy = Math.max(0, dny);
+    return visaNed(vDrag.dy);
+  }
   if(!vDrag.rör){
-    if(Math.abs(dx) < 6) return;
     vDrag.rör = true;
     vTrack().classList.add('dragging');
   }
@@ -2262,6 +2358,20 @@ viewerEl.addEventListener('pointermove', e => {
 
 function slutSvep(){
   if(!vDrag) return;
+  if(vDrag.riktning === 'ned'){
+    const { dy, vy } = vDrag;
+    vDrag = null; vNed = null;
+    const track = vTrack();
+    track.classList.remove('dragging');
+    if(!(dy > 55 || vy > .45)){ nollstallNed(true); return false; }
+    if(calm.matches){ nollstallNed(false); closeViewer(); return false; }
+    track.style.transition = 'transform .2s ease-in';
+    track.style.transform = `translateY(${viewerEl.clientHeight || 800}px)`;
+    viewerEl.style.transition = 'opacity .2s';
+    viewerEl.style.opacity = '0';
+    setTimeout(() => { closeViewer(); viewerEl.style.transition = ''; nollstallNed(false); }, 190);
+    return false;
+  }
   const { dx, w, rör } = vDrag;
   vDrag = null;
   const track = vTrack();
@@ -2604,7 +2714,7 @@ function renderViews(){
   document.getElementById('view-stat').innerHTML = `<h1>Statistik</h1>${statTiles(s, 'grid2')}
     <h2 class="sec">Länder per person</h2><div class="bars">${per.map(([id, n]) =>
       `<div class="bar">${av(id)}<span class="nm">${esc(personName(id))}</span><div class="track"><div class="fill" style="--pc:${personColor(id)};width:${n/maxC*100}%"></div></div><span class="val">${n} ${n === 1 ? 'land' : 'länder'}</span></div>`).join('')}</div>
-    <h2 class="sec">Resdagar per år</h2><div class="years">${Object.keys(years).sort().map(y =>
+    <h2 class="sec">Resdagar per år</h2><div class="years">${Object.keys(years).sort().reverse().map(y =>
       `<div><span class="v">${years[y]}</span><div class="col" style="height:${years[y]/maxY*70}%"></div><span>${y}</span></div>`).join('') || '<div><span>–</span></div>'}</div>
     ${(() => {
       const top = farthest(list, 6);
@@ -2741,7 +2851,7 @@ function renderSettings(){
     <p class="subtle">Temat gäller bara den här enheten. Väljer du Hedvig här ändras ingenting i de andras appar.</p>
     <div class="themes">${Object.entries(TEMAN).map(temaKort).join('')}</div>
 
-    <h2 class="sec">Hemort</h2>
+    <details class="fallbar"><summary>Hemort</summary>
     <p class="subtle">Landet ritas i egen färg och får en hus-markör på orten.
     Avstånden i statistiken räknas härifrån.</p>
     <div class="field"><label class="fl" for="setHomeName">Sök orten</label>
@@ -2754,8 +2864,9 @@ function renderSettings(){
         ? `Nu: ${esc(DB.home.place.name)}, ${esc(countryName(DB.home.iso))} · ${DB.home.place.lat.toFixed(3)}, ${DB.home.place.lon.toFixed(3)}`
         : 'Ingen hemort vald än.'}</p>
     </div>
+    </details>
 
-    <h2 class="sec">Resenärer</h2>
+    <details class="fallbar"><summary>Resenärer</summary>
     <p class="subtle">Familjen är förkryssad på varje ny resa. Övriga kryssas i när de var med.</p>
     <div class="plist" id="plist">${DB.people.map(p => `<div class="prow" data-person="${esc(p.id)}">
       ${av(p.id)}
@@ -2767,6 +2878,7 @@ function renderSettings(){
     <div class="addp"><input type="text" id="newPerson" placeholder="t.ex. mormor Ingrid" aria-label="Ny resenär">
       <button class="btn ghost" id="addPerson">Lägg till</button></div>
     <div class="actions"><button class="btn" id="savePeople">Spara resenärer</button></div>
+    </details>
     ${krumelurer.length ? `
     <h2 class="sec">Ortnamn att rätta</h2>
     <p class="subtle">De här platserna sparades med ortens eget alfabet, innan sökningen
@@ -2777,7 +2889,7 @@ function renderSettings(){
       <span><b>${esc(k.name)}</b><small>${esc(k.title)} · ${esc(span(k.start, k.end))}</small></span>
       <span></span></button>`).join('')}</div>` : ''}
 
-    <details class="avancerat">
+    <details class="fallbar">
       <summary>Avancerat och felsökning</summary>
 
     <h2 class="sec">Den här versionen</h2>
