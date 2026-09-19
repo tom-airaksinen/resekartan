@@ -94,9 +94,17 @@ telefonerna åt.
 när man har lust att titta på bilder.
 
 Att tiden är fast gör sändaren enklare: Flippa kör var femtonde minut för att
-träffa allas valda tider, här räcker en körning om dagen. Actions-cron är i UTC,
-så jobbet startar 14:00 och 15:00 UTC och skriptet kör bara när klockan i
-Stockholm faktiskt är 16 – det täcker både sommar- och vintertid.
+träffa allas valda tider, här räcker en gång om dagen.
+
+**Tidigast 16, inte exakt 16.** Actions-cron är i UTC, och schemalagda jobb
+startar ofta några minuter sent – ibland mycket mer. Med ett exakt timtest hade en
+försenad körning tyst hoppat över dagen. I stället gör jobbet fyra försök (14:00,
+15:30, 17:30 och 19:30 UTC), skickar tidigast 16 svensk tid, och varje
+prenumeration minns i `lastSent` vilket datum den senast fick något. Den första
+körningen som lyckas gör jobbet; resten ser att dagen är avklarad och avstår.
+
+Slår man på notiser efter 16 märks dagen som redan avklarad, annars hade dagens
+notis kommit med en gång – som ett hopp ur ingenstans.
 
 ## Vart trycket leder
 

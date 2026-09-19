@@ -2,10 +2,14 @@ name: Årsdagsnotiser
 
 on:
   schedule:
-    # Actions-cron är i UTC. Två körningar täcker sommar- och vintertid;
-    # skriptet gör bara något när klockan i Stockholm är 16.
+    # Actions-cron är i UTC, och körningar startar ofta sent. Fyra försök täcker
+    # sommar- och vintertid med marginal; skriptet skickar tidigast 16 svensk tid
+    # och minns per prenumeration vilket datum den senast fick något, så bara den
+    # första körningen som lyckas gör något.
     - cron: "0 14 * * *"
-    - cron: "0 15 * * *"
+    - cron: "30 15 * * *"
+    - cron: "30 17 * * *"
+    - cron: "30 19 * * *"
   workflow_dispatch:
     inputs:
       tvinga:

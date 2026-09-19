@@ -14,7 +14,7 @@ const path = require('path');
 
 const VAPID_PUBLIC = 'BFhuKfDnP9P-LzD10zHVCEcFZzNiXyncDz_xYy36kvALo3M3DEEuM0ayTnTBMS0FQ20aB10lucZRExHQj81RRwQ';
 const BAS = process.env.APP_URL || 'https://resekartan.tomairaksinen.se/';
-const TIMME = 16;                       // svensk tid
+const TIMME = 16;                       // tidigast, svensk tid
 const TVINGA = process.env.TVINGA === '1';   // för manuell körning och test
 const TORRKORNING = process.env.TORRKORNING === '1';
 
@@ -128,8 +128,12 @@ async function main(){
   const admin = require('firebase-admin');
   const webpush = require('web-push');
   const { datum, timme } = stockholm();
-  if(timme !== TIMME && !TVINGA){
-    console.log(`Klockan är ${timme} i Stockholm, notiser går ut ${TIMME}. Gör inget.`);
+  /* Tidigast 16, inte exakt 16. Schemalagda jobb på GitHub startar ofta några
+     minuter sent och ibland mycket mer, och med ett exakt timtest hoppades dagen
+     tyst över. I stället minns varje prenumeration vilket datum den senast fick
+     något, så en försenad körning hinner ikapp utan att någon får dubbelt. */
+  if(timme < TIMME && !TVINGA){
+    console.log(`Klockan är ${timme} i Stockholm, notiser går ut tidigast ${TIMME}. Gör inget.`);
     return;
   }
   webpush.setVapidDetails('mailto:tom.airaksinen@kleer.se', VAPID_PUBLIC, VAPID_PRIVATE);
@@ -146,17 +150,24 @@ async function main(){
   const snap = await db.collection('resekartan/data/push').get();
   console.log(`${datum}: ${trips.length} resor, ${snap.size} prenumerationer`);
 
-  let skickade = 0, tomma = 0, stadade = 0;
+  let skickade = 0, tomma = 0, redan = 0, stadade = 0;
   for(const d of snap.docs){
     const p = d.data();
     if(!p || !p.enabled || !p.subscription){ continue; }
+    if(p.lastSent === datum && !TVINGA){ redan++; continue; }   // dagen är redan avklarad
     const traffar = arsdagarPa(trips, datum, p.lage || 'lagom', p.personer);
-    if(!traffar.length){ tomma++; continue; }
+    if(!traffar.length){
+      // Märk dagen ändå, annars räknas resorna om vid varje körning
+      if(!TORRKORNING) await d.ref.update({ lastSent: datum });
+      tomma++;
+      continue;
+    }
     const nyttolast = notis(traffar, people, datum);
     console.log(`  ${d.id}: ${traffar.length} träff – ${nyttolast.title}`);
     if(TORRKORNING) continue;
     try {
       await webpush.sendNotification(p.subscription, JSON.stringify(nyttolast));
+      await d.ref.update({ lastSent: datum });
       skickade++;
     } catch(e){
       // 404/410 = prenumerationen finns inte längre; appen är avinstallerad
@@ -168,7 +179,7 @@ async function main(){
       }
     }
   }
-  console.log(`Klart: ${skickade} skickade, ${tomma} utan årsdag, ${stadade} borttagna.`);
+  console.log(`Klart: ${skickade} skickade, ${tomma} utan årsdag, ${redan} redan avklarade, ${stadade} borttagna.`);
 }
 
 // Reglerna går att testa utan Firebase: kör filen direkt så skickar den,

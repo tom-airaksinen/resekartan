@@ -15,7 +15,7 @@ const AUTH = {
 };
 const LS_KEY = 'resekartan.data', LS_AUTH = 'resekartan.unlocked', LS_SEEN = 'resekartan.inloggad', LS_LEGEND = 'resekartan.legend';
 const LS_FILTER = 'resekartan.filter';   // vilka resenärer som var valda sist, per enhet
-const APP_VERSION = 'v70';   // följ sw.js CACHE, så man ser vad som faktiskt körs
+const APP_VERSION = 'v71';   // följ sw.js CACHE, så man ser vad som faktiskt körs
 
 /* ============================ Tema ============================
    Temat är per enhet och ligger i localStorage, inte i DB – Hedvig ska kunna ha
@@ -4130,11 +4130,25 @@ const b64ToBytes = b64 => {
 };
 const pushRef = () => CLOUD.mod.store.doc(CLOUD.db, 'resekartan', 'data', 'push', enhetsId());
 
+/* Sändaren minns per prenumeration vilket datum den senast fick något, så en
+   försenad körning hinner ikapp utan att någon får dubbelt. Slår man på notiser
+   efter klockan 16 märks dagen som avklarad – annars hade dagens notis kommit
+   med en gång, som ett hopp ur ingenstans. */
+function dagenRedanAvklarad(){
+  const nu = new Date();
+  const timme = +new Intl.DateTimeFormat('sv-SE', { timeZone: 'Europe/Stockholm',
+    hour: '2-digit', hour12: false }).format(nu);
+  if(timme < 16) return null;
+  return new Intl.DateTimeFormat('sv-SE', { timeZone: 'Europe/Stockholm',
+    year: 'numeric', month: '2-digit', day: '2-digit' }).format(nu);
+}
+
 async function sparaPrenumeration(sub, val){
   if(!CLOUD.on) throw new Error('offline');
   await CLOUD.mod.store.setDoc(pushRef(), {
     subscription: JSON.parse(JSON.stringify(sub)),
     lage: val.lage, personer: val.personer, enabled: true,
+    lastSent: dagenRedanAvklarad(),
     ua: (navigator.userAgent || '').slice(0, 120),
     updatedAt: new Date().toISOString()
   });
