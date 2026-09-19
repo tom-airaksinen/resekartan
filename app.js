@@ -15,7 +15,7 @@ const AUTH = {
 };
 const LS_KEY = 'resekartan.data', LS_AUTH = 'resekartan.unlocked', LS_SEEN = 'resekartan.inloggad', LS_LEGEND = 'resekartan.legend';
 const LS_FILTER = 'resekartan.filter';   // vilka resenärer som var valda sist, per enhet
-const APP_VERSION = 'v73';   // följ sw.js CACHE, så man ser vad som faktiskt körs
+const APP_VERSION = 'v74';   // följ sw.js CACHE, så man ser vad som faktiskt körs
 
 /* ============================ Tema ============================
    Temat är per enhet och ligger i localStorage, inte i DB – Hedvig ska kunna ha
@@ -1070,6 +1070,17 @@ function paint(){
   d3.select('#pins').selectAll('g')
     .classed('active', q => q.t.id === sel).classed('dim', q => sel && q.t.id !== sel);
   rescale();
+}
+
+/* Rama in det som är valt, utan att gissa: en öppen resa, ett öppet land, annars
+   hela världen. */
+function ramaOm(){
+  if(sel){
+    const t = DB.trips.find(x => x.id === sel);
+    if(t) return flyTo(t);
+  }
+  if(selCountry) return flyToCountry(selCountry);
+  resetZoom();
 }
 
 function mapView(){
@@ -4377,7 +4388,10 @@ function start(){
   lasFilter();
   cloudDot(CLOUD.on ? 'on' : '', CLOUD.on ? 'Synkad med familjens data' : '');
   renderWho(); layout(); renderSheet(); renderViews();
-  addEventListener('resize', layout);
+  /* Omritningen räknar om projektionen men rör inte zoomen, så transformen pekar
+     på fel ställe efteråt. Roterade man telefonen medan man var inzoomad i ett
+     land hamnade man någon helt annanstans. Rama in det man tittar på igen. */
+  addEventListener('resize', () => { layout(); ramaOm(); });
 }
 
 /* ============================ Ny version ============================

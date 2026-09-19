@@ -38,6 +38,27 @@ Firestore-reglerna rör man inte: de tittar på uid, inte på varifrån anropet 
 Den gamla adressen `tom-airaksinen.github.io/resekartan/` fortsätter fungera och
 skickar vidare, så gamla hemskärmsgenvägar överlever.
 
+## Sidan /om
+
+`om/index.html` är en publik presentationssida på
+https://resekartan.tomairaksinen.se/om – vad appen gör, med skärmdumpar. Den
+delar inte kod med appen; färgerna och typsnitten är samma värden skrivna för
+hand, och loggan är en kopia av symbolen i `index.html`.
+
+**Skärmdumparna visar exempeldatat i `data/seed.js`, aldrig familjens riktiga
+resor.** Sidan är publik och repot är publikt, så det är inte en detalj att vara
+slarvig med. De tas om med headless Chrome mot en lokal kopia där
+`data/firebase-config.js` är tömd:
+
+```sh
+--window-size=500,1000 --force-prefers-reduced-motion=reduce
+```
+
+Två saker som krävs för att de ska bli rätt: bredden golvas vid 500 i headless
+(mindre `--window-size` ger ändå 500 och en beskuren bild), och utan reducerad
+rörelse hinner kartans flygning inte bli klar – d3:s övergångar drivs inte av
+den virtuella tiden.
+
 ## Status
 
 **Live sedan 2026-09-16, på egen adress sedan 2026-09-19.** I skarp drift: karta,
