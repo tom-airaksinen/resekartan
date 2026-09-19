@@ -64,9 +64,15 @@ Planerade resor är aldrig med – de har inte hänt än.
 
 ## Vilkas resor
 
-En kryssruta per familjemedlem: *"Skicka notiser om resor där dessa var med."*
+En kryssruta per familjemedlem: *"Resor där någon av dessa var med."*
 
-Det är en **egen** inställning, inte resenärsfiltret i toppbaren. Filtret är en
+**"Någon av" står utskrivet med flit.** Kryssrutorna betyder **eller** – en resa
+räknas om minst en av de ikryssade var med. Resenärsfiltret i toppbaren, som ser
+likadant ut, betyder **och**: väljer man Tom och Karin visas bara resor där båda
+var med. Att den skillnaden inte syntes i orden har redan förvirrat en gång, se
+"Alla resor är inte samma sak som hela familjen" i README.
+
+Det är dessutom en **egen** inställning, inte resenärsfiltret. Filtret är en
 vyinställning, och hade det styrt notiserna skulle Hedvig tysta sina egna notiser
 genom att titta på kartan på ett annat sätt.
 

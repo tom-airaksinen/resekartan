@@ -15,7 +15,7 @@ const AUTH = {
 };
 const LS_KEY = 'resekartan.data', LS_AUTH = 'resekartan.unlocked', LS_SEEN = 'resekartan.inloggad', LS_LEGEND = 'resekartan.legend';
 const LS_FILTER = 'resekartan.filter';   // vilka resenärer som var valda sist, per enhet
-const APP_VERSION = 'v68';   // följ sw.js CACHE, så man ser vad som faktiskt körs
+const APP_VERSION = 'v69';   // följ sw.js CACHE, så man ser vad som faktiskt körs
 
 /* ============================ Tema ============================
    Temat är per enhet och ligger i localStorage, inte i DB – Hedvig ska kunna ha
@@ -2687,7 +2687,7 @@ function notisAvsnitt(){
     <p class="hint">${val.personer.length
       ? `Det blir ${n === 0 ? 'ingen notis' : n === 1 ? 'en notis' : n + ' notiser'} det närmaste året.`
       : 'Kryssa i minst en person – annars skickas ingenting.'}</p>
-    <label class="fl" style="margin-top:14px">Resor där dessa var med</label>
+    <label class="fl" style="margin-top:14px">Resor där någon av dessa var med</label>
     <div class="chips">${brickor}</div>
     <div class="actions"><button type="button" class="btn ghost" id="pushTest">Skicka en testnotis</button></div>` : ''}`;
 }
@@ -4054,8 +4054,14 @@ function enhetsId(){
 
 const pushStods = () => 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
 const paHemskarmen = () => matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
-// iOS släpper bara in web push för appar som lagts till på hemskärmen (16.4+)
-const kraverHemskarm = () => /iPad|iPhone|iPod/.test(navigator.userAgent) && !paHemskarmen();
+/* iPadOS säger "Macintosh" i user agent sedan version 13, så en padda går inte
+   att känna igen på namnet. Pekpunkterna skiljer den från en riktig Mac – och
+   utan det testet visades notisrutan på paddan som om allt var i sin ordning,
+   fast prenumerationen aldrig hade kunnat gå igenom. */
+const applePekskarm = () => /iPhone|iPod|iPad/.test(navigator.userAgent)
+  || (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1);
+// iOS och iPadOS släpper bara in web push för appar på hemskärmen (16.4+)
+const kraverHemskarm = () => applePekskarm() && !paHemskarmen();
 
 /* ---- Vilka resor har årsdag ---- */
 const skottar = y => (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0;
