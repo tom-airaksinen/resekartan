@@ -45,6 +45,10 @@
 - [x] Ortsökningen sparade ortens eget alfabet (沖縄県 i stället för Okinawa) i Japan och Etiopien. → **Svar:** Åtgärdat 2026-09-19 (v58): Nominatim frågas med `accept-language=sv,en` och `namedetails=1`, Photon med `lang=en`, och vid dubbletter vinner ett latinskt namn. Svenska går fortfarande först. Redan sparade namn listas under Inställningar → Ortnamn att rätta och rättas för hand. (2026-09-19)
 - [ ] Är "Räkna som permanentboende, ta inte med i statistiken över resdagar" rätt ord i kryssrutan, eller räcker "Vi bodde här" när man vant sig? (2026-09-19)
 
+## Kartan
+- [x] Territorier färgades av sitt moderland – en helg i Paris tände Réunion och Franska Guyana. → **Svar:** Åtgärdat 2026-09-19 (v63). Länder med delar längre än `UTPOST_KM` (800 km) från huvudlandmassans omslutande ruta delas i flera ytor, och bara de delar där det sitter en plupp färgas. Land utan koordinater färgas helt, som förut. (2026-09-19)
+- [ ] Är 800 km för snålt? Vid den gränsen delas 23 länder, och Okinawa, Borneo och Kanarieöarna slutar färgas av Tokyo, Kuala Lumpur och Madrid. 1 500 km ger 11 länder och lämnar dem hela; 2 500 ger 7 och lämnar även Alaska och Azorerna. En siffra på en rad i `app.js`. (2026-09-19)
+
 ## Bildvisaren
 - [x] Ska man kunna nypa för att zooma i bilderna, även om upplösningen är låg? → **Svar:** Ja, byggt 2026-09-19 (v60). Nyp, panorering med ett finger när man är inzoomad, och dubbeltryck för 2,5×. Taket är 6×; bilderna är 1400 px, så det blir grynigt – men att kunna gå nära är värt det. (2026-09-19)
 - [ ] När man svepar vid kanten av en inzoomad bild: ska svepet ta vid och byta bild? Kräver att man vet var bildens kant går inuti `object-fit: contain`, alltså bildens proportioner. Nu måste man zooma ut först. (2026-09-19)

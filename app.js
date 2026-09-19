@@ -15,7 +15,7 @@ const AUTH = {
 };
 const LS_KEY = 'resekartan.data', LS_AUTH = 'resekartan.unlocked', LS_SEEN = 'resekartan.inloggad', LS_LEGEND = 'resekartan.legend';
 const LS_FILTER = 'resekartan.filter';   // vilka resenärer som var valda sist, per enhet
-const APP_VERSION = 'v62';   // följ sw.js CACHE, så man ser vad som faktiskt körs
+const APP_VERSION = 'v63';   // följ sw.js CACHE, så man ser vad som faktiskt körs
 
 /* ============================ Tema ============================
    Temat är per enhet och ligger i localStorage, inte i DB – Hedvig ska kunna ha
@@ -763,6 +763,88 @@ async function migratePhotos(tripId, list){
 /* ============================ Kartan ============================ */
 const svg = d3.select('#map'), gWorld = d3.select('#world');
 const world = topojson.feature(WORLD, WORLD.objects.countries);
+
+/* ---- Landdelar ----
+   Natural Earth ritar Frankrike som **en** yta, och i den ligger Réunion,
+   Franska Guyana, Mayotte och Antillerna. Färgar man "Frankrike" färgas allt det
+   där med, så en helg i Paris tände öar på andra sidan jorden. Samma sak med
+   Nederländernas Karibien, USA:s Alaska och Hawaii, Spaniens Kanarieöar.
+
+   Länder med delar långt från huvudlandmassan delas därför i flera ytor: en
+   kärna och en per avlägsen klunga. Sedan färgas bara de delar där man faktiskt
+   satt en plupp. Resten av världen ritas som förut, en yta per land – delade vi
+   allt skulle antalet paths gå från 240 till flera tusen, och `rescale()` rör
+   dem alla vid varje zoomsteg.
+
+   Gränsen är 800 km från huvuddelens **omslutande ruta**, inte från dess mitt.
+   Mot mitten mätt ligger Maine 2 500 km från USA:s tyngdpunkt och hade blivit en
+   utpost; mot rutan mätt ligger det inuti och Alaska 2 100 km utanför. Korsika
+   hamnar 80 km utanför Frankrikes ruta och räknas som kärna, Guadeloupe 6 700. */
+const UTPOST_KM = 800;
+
+const kl = (v, a, b) => Math.min(b, Math.max(a, v));
+function avstandTillRuta([[w, s], [e, n]], [lon, lat]){
+  return d3.geoDistance([kl(lon, w, e), kl(lat, s, n)], [lon, lat]) * EARTH_KM;
+}
+// Punkten räknas med en grads marginal: en plupp lagd strax utanför kusten hör
+// ändå till ön man var på.
+function iRuta([[w, s], [e, n]], lon, lat, pad = 1){
+  if(lat < s - pad || lat > n + pad) return false;
+  return w <= e ? (lon >= w - pad && lon <= e + pad) : (lon >= w - pad || lon <= e + pad);
+}
+
+function delaLand(f){
+  const g = f.geometry;
+  if(g.type !== 'MultiPolygon' || g.coordinates.length < 2) return null;
+  // Snabb utgång: ryms landet i ett litet fönster kan ingen del ligga långt bort
+  const bb = d3.geoBounds(f);
+  if(avstandTillRuta([bb[0], bb[0]], bb[1]) < UTPOST_KM) return null;
+
+  const delar = g.coordinates.map(c => {
+    const poly = { type: 'Polygon', coordinates: c };
+    return { c, area: d3.geoArea(poly), mitt: d3.geoCentroid(poly), bb: d3.geoBounds(poly) };
+  }).sort((a, b) => b.area - a.area);
+
+  const huvud = delar[0];
+  const ute = [], karna = [];
+  delar.forEach(d => (avstandTillRuta(huvud.bb, d.mitt) > UTPOST_KM ? ute : karna).push(d));
+  if(!ute.length) return null;
+
+  // Klustra utposterna, annars blir Guadeloupes öar fem ytor i stället för en
+  const klungor = [];
+  ute.forEach(d => {
+    const k = klungor.find(k => d3.geoDistance(k.mitt, d.mitt) * EARTH_KM <= UTPOST_KM);
+    if(k) k.delar.push(d); else klungor.push({ mitt: d.mitt, delar: [d] });
+  });
+  return [{ namn: 'k', delar: karna }, ...klungor.map((k, i) => ({ namn: 'u' + i, delar: k.delar }))];
+}
+
+const KARTDELAR = world.features.flatMap(f => {
+  const uppdelat = delaLand(f);
+  if(!uppdelat) return [{ id: f.id, key: f.id, karna: true, geometry: f.geometry, bb: d3.geoBounds(f) }];
+  return uppdelat.map(x => {
+    const geometry = { type: 'MultiPolygon', coordinates: x.delar.map(d => d.c) };
+    return { id: f.id, key: f.id + ':' + x.namn, karna: x.namn === 'k', geometry,
+             bb: d3.geoBounds({ type: 'Feature', geometry }) };
+  });
+});
+const DELAR = KARTDELAR.reduce((m, d) => m.set(d.id, [...(m.get(d.id) || []), d]), new Map());
+
+/* Vilka delar av landet ska färgas? Den utpost som rymmer plupparna, annars
+   kärnan. Ett odelat land, eller ett land utan koordinater alls, färgas helt –
+   som förut. */
+function aktivaDelar(iso, punkter){
+  const delar = DELAR.get(iso);
+  if(!delar || delar.length < 2) return null;
+  if(!punkter || !punkter.length) return null;
+  const traff = new Set();
+  punkter.forEach(([lon, lat]) => {
+    const u = delar.find(d => !d.karna && iRuta(d.bb, lon, lat));
+    traff.add(u ? u.key : iso + ':k');
+  });
+  return traff;
+}
+const delFargas = (traff, d) => !traff || traff.has(d.key);
 const landMesh = topojson.merge(WORLD, WORLD.objects.countries.geometries);
 const proj = d3.geoNaturalEarth1(), path = d3.geoPath(proj);
 let W = 0, H = 0, k = 1;
@@ -789,9 +871,9 @@ function layout(){
   svg.attr('viewBox', `0 0 ${W} ${H}`);
   proj.fitExtent([[8, 60], [W - 8, H - (window.innerWidth < 900 ? H * .42 : 8)]], world);
   d3.select('#coast').attr('d', path(landMesh));
-  d3.select('#countries').selectAll('path').data(world.features).join('path')
-    .attr('d', path).attr('class', 'land')
-    .on('click', (e, f) => { if(pickTarget) return; e.stopPropagation(); showCountry(f.id); });
+  d3.select('#countries').selectAll('path').data(KARTDELAR, d => d.key).join('path')
+    .attr('d', d => path(d.geometry)).attr('class', 'land')
+    .on('click', (e, d) => { if(pickTarget) return; e.stopPropagation(); showCountry(d.id); });
   d3.select('#sealabels').selectAll('text').data(W >= 620 ? SEAS : []).join('text')
     .attr('class', 'sealabel').text(d => d[0])
     .attr('x', d => proj([d[2], d[1]])[0]).attr('y', d => proj([d[2], d[1]])[1]);
@@ -941,24 +1023,41 @@ function legendRamp(max){
 }
 
 function paint(){
-  const antal = {}, p = new Set();
+  const antal = {}, p = new Set(), gjorda = {}, planerade = {};
+  const punkt = (bok, iso, s) => (s.places || []).forEach(pl => {
+    if(isFinite(pl.lat) && isFinite(pl.lon)) (bok[iso] ??= []).push([pl.lon, pl.lat]);
+  });
   visible().forEach(t => {
     const räknade = new Set();
     t.stops.forEach(s => {
-      if(!inFilter(t, s) || isHome(s.iso)) return;
+      if(!inFilter(t, s)) return;
+      punkt(t.planned ? planerade : gjorda, s.iso, s);
+      if(isHome(s.iso)) return;
       if(t.planned){ p.add(s.iso); return; }
       if(räknade.has(s.iso)) return;      // ett land två gånger i samma resa är en resa
       räknade.add(s.iso);
       antal[s.iso] = (antal[s.iso] || 0) + 1;
     });
   });
+  // Hemorten hör till hemlandets kärna även om inga resor dit ligger inne
+  if(DB.home?.iso && DB.home.place)
+    (gjorda[DB.home.iso] ??= []).push([DB.home.place.lon, DB.home.place.lat]);
   Object.keys(antal).forEach(i => p.delete(i));
   const max = Math.max(0, ...Object.values(antal));
   legendRamp(max);
-  d3.select('#countries').selectAll('path').attr('class', f =>
-    'land' + (isHome(f.id) ? ' home hit' : '')
-    + (antal[f.id] ? ' visited hit v' + heatNivå(antal[f.id], max) : '')
-    + (p.has(f.id) ? ' planned hit' : ''));
+  const cache = new Map();
+  const traffar = (bok, iso) => {
+    const nyckel = bok === gjorda ? 'g' + iso : 'p' + iso;
+    if(!cache.has(nyckel)) cache.set(nyckel, aktivaDelar(iso, bok[iso]));
+    return cache.get(nyckel);
+  };
+  d3.select('#countries').selectAll('path').attr('class', d => {
+    const gjort = delFargas(traffar(gjorda, d.id), d);
+    const plan = delFargas(traffar(planerade, d.id), d);
+    return 'land' + (isHome(d.id) && gjort ? ' home hit' : '')
+      + (antal[d.id] && gjort ? ' visited hit v' + heatNivå(antal[d.id], max) : '')
+      + (p.has(d.id) && plan ? ' planned hit' : '');
+  });
   d3.select('#pins').selectAll('g')
     .classed('active', q => q.t.id === sel).classed('dim', q => sel && q.t.id !== sel);
   rescale();

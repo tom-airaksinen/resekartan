@@ -454,6 +454,40 @@ resdagar, antal resor, besökta länder, platser, "längst hemifrån" och landvy
 sammanfattning. De syns på kartan i sin egen ton, i listorna och i sökningen –
 det är trevligt att se vad som väntar – men man har inte varit där än.
 
+### Territorier färgas inte av sitt moderland
+
+Natural Earth ritar Frankrike som **en** yta, och i den ligger Réunion, Franska
+Guyana, Mayotte och Antillerna. Färgade man "Frankrike" färgades alltså allt det
+där med, och en helg i Paris tände öar på andra sidan jorden. Samma sak med
+Nederländernas Karibien, USA:s Hawaii och Spaniens Kanarieöar.
+
+Länder med delar långt från huvudlandmassan delas därför i flera ytor: en kärna
+och en per avlägsen klunga (`delaLand()`). Sedan färgas bara de delar där det
+faktiskt sitter en plupp. Ett land utan koordinater alls färgas helt, som förut –
+annars hade gamla resor utan positioner slutat synas.
+
+**Avståndet mäts till huvuddelens omslutande ruta, inte till dess mitt.** Mot
+mitten mätt ligger Maine 2 500 km från USA:s tyngdpunkt och hade blivit en utpost;
+mot rutan mätt ligger det inuti, medan Alaska hamnar 2 100 km utanför. Korsika
+ligger 80 km utanför Frankrikes ruta och räknas som kärna, Guadeloupe 6 700.
+
+Utposterna klustras innan de blir ytor, annars blir Guadeloupes öar fem paths i
+stället för en. Totalt går kartan från 240 till 293 paths – `rescale()` rör dem
+alla vid varje zoomsteg, så att dela *alla* länder hade kostat flera tusen.
+
+**`UTPOST_KM` är gränsen, och den är en smaksak.** Så här faller länderna ut:
+
+| Gräns | Delas | Blir kvar hela |
+| --- | --- | --- |
+| 800 km | 23 länder | – |
+| 1 500 km | 11 länder | Japan, Malaysia, Spanien, Kanada, Norge |
+| 2 500 km | 7 länder | + Portugal, Indonesien, Australien, USA:s Alaska |
+
+Vi kör på **800**, den mest sanningsenliga: en resa till Kuala Lumpur färgar inte
+Borneo och en resa till Tokyo färgar inte Okinawa. Känns det snålt är 1 500 nästa
+steg – det är en siffra på en rad. 2 500 och 3 000 ger samma utfall, så där ligger
+en naturlig lucka i datat om man vill ha en försiktig gräns.
+
 ### Färgskalan på kartan
 
 Besökta länder färgas efter hur många resor som gått dit, i fyra steg: `--v1`
