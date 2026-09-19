@@ -28,6 +28,11 @@ const DOKUMENT = `https://firestore.googleapis.com/v1/projects/${PROJEKT}/databa
 const TIMME = 16;                       // tidigast, svensk tid
 const TVINGA = process.env.TVINGA === '1';   // för manuell körning och test
 const TORRKORNING = process.env.TORRKORNING === '1';
+/* En riktig notis till alla enheter, oavsett årsdagar och klockslag. Finns för
+   att kunna se hela kedjan fungera – VAPID, prenumeration, service worker – utan
+   att vänta på att en resa faktiskt fyller år. Skickar på riktigt; torrkörning
+   vore meningslöst här. */
+const PROVNOTIS = process.env.PROVNOTIS === '1';
 
 // ---- Landnamn på svenska, ur samma tabell som appen ----
 const isoRa = fs.readFileSync(path.join(__dirname, '..', 'data', 'iso.js'), 'utf8');
@@ -212,7 +217,7 @@ async function main(){
      minuter sent och ibland mycket mer, och med ett exakt timtest hoppades dagen
      tyst över. I stället minns varje prenumeration vilket datum den senast fick
      något, så en försenad körning hinner ikapp utan att någon får dubbelt. */
-  if(timme < TIMME && !TVINGA){
+  if(timme < TIMME && !TVINGA && !PROVNOTIS){
     console.log(`Klockan är ${timme} i Stockholm, notiser går ut tidigast ${TIMME}. Gör inget.`);
     return;
   }
@@ -229,6 +234,27 @@ async function main(){
   console.log(`${datum}: ${trips.length} resor, ${prenumerationer.length} prenumerationer`);
 
   let skickade = 0, tomma = 0, redan = 0, stadade = 0;
+
+  if(PROVNOTIS){
+    console.log('PROVNOTIS: skickar en riktig notis till alla enheter.');
+    for(const p of prenumerationer){
+      if(!p.enabled || !p.subscription) continue;
+      try {
+        await webpush.sendNotification(p.subscription, JSON.stringify({
+          title: 'Provnotis från Resekartan 🥳',
+          body: 'Kommer den här fram gör årsdagsnotiserna det också.',
+          url: BAS
+        }));
+        console.log(`  ${p.id}: skickad`);
+        skickade++;
+      } catch(e){
+        if(e.statusCode === 404 || e.statusCode === 410){ await taBort(token, p.id); stadade++; }
+        else console.error(`  ${p.id}: fel ${e.statusCode || ''} ${e.message}`);
+      }
+    }
+    console.log(`Klart: ${skickade} skickade, ${stadade} borttagna. Inga lastSent rördes.`);
+    return;
+  }
   for(const p of prenumerationer){
     if(!p.enabled || !p.subscription) continue;
     if(p.lastSent === datum && !TVINGA){ redan++; continue; }   // dagen är redan avklarad

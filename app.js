@@ -15,7 +15,7 @@ const AUTH = {
 };
 const LS_KEY = 'resekartan.data', LS_AUTH = 'resekartan.unlocked', LS_SEEN = 'resekartan.inloggad', LS_LEGEND = 'resekartan.legend';
 const LS_FILTER = 'resekartan.filter';   // vilka resenärer som var valda sist, per enhet
-const APP_VERSION = 'v71';   // följ sw.js CACHE, så man ser vad som faktiskt körs
+const APP_VERSION = 'v72';   // följ sw.js CACHE, så man ser vad som faktiskt körs
 
 /* ============================ Tema ============================
    Temat är per enhet och ligger i localStorage, inte i DB – Hedvig ska kunna ha
@@ -2674,13 +2674,26 @@ function notisAvsnitt(){
   if(!CLOUD.on)
     return rubrik + '<p class="hint">Logga in mot molnet för att kunna slå på notiser.</p>';
 
+  /* Blockerat på systemnivå är ett eget läge, inte "av". Appen kan inte fråga
+     igen – webbläsaren svarar nej direkt – så en kryssruta hade bara känts
+     trasig. Säg var man slår på det i stället. */
+  if(Notification.permission === 'denied') return rubrik + `<div class="pitch blockerad">
+    <p class="rub">Notiser är avstängda för Resekartan</p>
+    <p>Telefonen släpper inte igenom dem, och appen kan inte slå på dem åt dig.
+    Gå till <b>Inställningar → Resekartan → Notiser</b> i telefonen, slå på där,
+    och kom tillbaka hit.</p>
+  </div>`;
+
   const kort = ([id, l]) => `<button type="button" data-lage="${id}" aria-pressed="${val.lage === id}">
     <b>${esc(l.namn)}</b><small>${esc(l.desc)}</small>${TICK}</button>`;
   const brickor = family().map(p => `<button type="button" class="chip" data-pushperson="${esc(p.id)}"
     style="--pc:${personColor(p.id)}" aria-pressed="${val.personer.includes(p.id)}">${av(p.id)}${esc(p.name)}${TICK}</button>`).join('');
   const n = val.personer.length ? notisAntal(val.lage, val.personer) : 0;
 
-  if(!val.pa) return rubrik + `<div class="pitch">
+  /* Systemets behörighet avgör, inte appens minnesanteckning. Stänger man av
+     notiser i telefonens inställningar ska reglaget här följa med – annars står
+     det "på" medan ingenting kommer fram. */
+  if(!val.pa || Notification.permission !== 'granted') return rubrik + `<div class="pitch">
     <p class="rub">Bli påmind om era resor</p>
     <p>"I dag för fem år sedan kom ni hem från Rumänien." En notis på årsdagen av en
     avslutad resa, med en väg rakt in i resan och bilderna.</p>
@@ -4234,7 +4247,17 @@ function normaliseDB(){
   // Äldre data saknar core-flaggan – då var alla familj
   if(!DB.people.some(p => p.core)) DB.people.forEach(p => { p.core = true; });
 }
+/* Behörigheten kan ha dragits tillbaka i telefonens inställningar sedan sist.
+   Då är prenumerationen död – sändaren städar bort den när den får 404 – och
+   den lokala flaggan ska inte påstå något annat. */
+function synkaNotisLage(){
+  if(!('Notification' in window)) return;
+  const val = notisVal();
+  if(val.pa && Notification.permission !== 'granted') setNotisVal({ ...val, pa: false });
+}
+
 function start(){
+  synkaNotisLage();
   if(!CLOUD.on) DB = loadDB();
   normaliseDB();
   // Kartan utgår från familjens gemensamma resor, men har någon valt något

@@ -155,6 +155,42 @@ Ingen av dem står i koden. Den publika VAPID-nyckeln och projektets API-nyckel 
 inte hemliga – de identifierar bara projektet, och det som skyddar datat är
 Firestore-reglerna.
 
+## Lägen i inställningsrutan
+
+Rutan visar olika saker beroende på vad som faktiskt går att göra:
+
+| Läge | Vad som visas |
+| --- | --- |
+| webbläsaren klarar inte push | en rad som säger det |
+| iPhone eller iPad, inte på hemskärmen | hur man lägger dit appen |
+| inte inloggad mot molnet | logga in först |
+| **blockerat i telefonen** (`denied`) | rött kort: slå på i systemets inställningar |
+| av | en inbjudan, inte en kryssruta bland andra |
+| på | lägen, personer och en testknapp |
+
+**Systemets behörighet avgör om reglaget står på, inte appens minnesanteckning.**
+Stänger man av notiser i telefonens inställningar ska rutan följa med – annars
+står det "på" medan ingenting kommer fram. `synkaNotisLage()` rättar den lokala
+flaggan vid start, och `notisAvsnitt()` läser `Notification.permission` varje
+gång den ritas.
+
+Blockerat är ett **eget** läge, inte "av". Appen kan inte fråga igen – webbläsaren
+svarar nej direkt – så en kryssruta hade bara känts trasig.
+
+## Att prova hela kedjan
+
+**Actions → Årsdagsnotiser → Run workflow** har tre kryss:
+
+| Kryss | Vad det gör |
+| --- | --- |
+| tvinga | struntar i att klockan ska vara 16 |
+| torrkörning | visar vad som skulle skickas, skickar inget |
+| **provnotis** | skickar en **riktig** notis till alla enheter, oavsett årsdagar |
+
+Provnotisen finns för att kunna se hela kedjan fungera – VAPID, prenumeration,
+service worker, telefonen – utan att vänta på att en resa faktiskt fyller år. Den
+rör inte `lastSent`, så dagens riktiga notis kommer ändå.
+
 ## Att veta
 
 **På iPhone fungerar web push bara för appar på hemskärmen**, iOS 16.4 och uppåt.

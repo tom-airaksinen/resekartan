@@ -14,8 +14,8 @@ service cloud.firestore {
     // förbi de här reglerna helt. Se docs/arsdagsnotiser.md.
     function familjen() {
       return [
-        'NIek1TuzPkam53vMTkh4h8LbQjP2'
-        // , '<uid för notiser@tomairaksinen.se>'
+        'NIek1TuzPkam53vMTkh4h8LbQjP2',
+	'gryX85RCD7YH2e8v9js7Va18phj2'
       ];
     }
 

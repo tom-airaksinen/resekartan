@@ -20,6 +20,10 @@ on:
         description: "Visa vad som skulle skickas, utan att skicka"
         type: boolean
         default: true
+      provnotis:
+        description: "Skicka en RIKTIG provnotis till alla enheter (struntar i årsdagar och torrkörning)"
+        type: boolean
+        default: false
 
 concurrency:
   group: arsdagsnotiser
@@ -29,10 +33,10 @@ jobs:
   skicka:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
-          node-version: "20"
+          node-version: "22"
       - run: npm install web-push@3 --no-save
       - run: node scripts/send-arsdagar.js
         env:
@@ -41,3 +45,4 @@ jobs:
           FIREBASE_PASSWORD: ${{ secrets.FIREBASE_PASSWORD }}
           TVINGA: ${{ inputs.tvinga && '1' || '' }}
           TORRKORNING: ${{ inputs.torrkorning && '1' || '' }}
+          PROVNOTIS: ${{ inputs.provnotis && '1' || '' }}
