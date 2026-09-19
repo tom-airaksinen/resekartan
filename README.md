@@ -128,6 +128,13 @@ Den halva sekunden är med flit: originalet ska inte konkurrera om nätet med de
 rutnät man faktiskt tittar på. Blurren tas bort så fort 400 px-versionen är inne,
 inte när originalet är det – annars står bilden och ser suddig ut i onödan.
 
+Herobilden är ett `<button>` med `data-open="0"`, inte en `div`. Det är samma
+bild som första rutan i galleriet, så ett tryck ska göra samma sak – öppna
+visaren på bild ett, med svep och bläddring därifrån. `data-open` plockas upp av
+samma lyssnare som miniatyrerna, och knappelementet ger tryck, tabb och Enter
+utan en rad egen kod. Tappar man på den innan bilderna hunnit fram gör den
+ingenting: `openViewer()` returnerar tidigt när `phCache` är tom.
+
 **Arket börjar alltid överst.** Att skriva om `#sheetBody` nollställer inte
 skrollningen av sig självt. Öppnade man en resa från en nedskrollad lista –
 träfflistan i sökningen, Alla resor – började detaljen mitt i, och herobilden

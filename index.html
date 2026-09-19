@@ -343,8 +343,13 @@ h2.sec:first-child{margin-top:8px}
 /* Omslaget stort överst. Rutan har fast höjd redan innan bilden kommit, så
    sidan inte hoppar; miniatyren på 240 px ritas uppskalad och suddig medan de
    skarpa versionerna laddas, och blurren tas bort när den första är inne. */
-.triphero{position:relative;aspect-ratio:3/2;max-height:34vh;margin:2px 0 12px;border-radius:14px;
-  overflow:hidden;background:var(--surface-2)}
+/* Ett <button>, inte en div: herobilden är samma bild som första rutan i
+   galleriet och öppnar visaren på samma sätt, så den ska svara på tryck,
+   tabb och Enter utan egen kod. data-open="0" plockas upp av samma lyssnare
+   som miniatyrerna. */
+.triphero{position:relative;display:block;width:100%;aspect-ratio:3/2;max-height:34vh;
+  margin:2px 0 12px;border-radius:14px;overflow:hidden;background:var(--surface-2)}
+.triphero:active{opacity:.94}
 .triphero img{display:block;width:100%;height:100%;object-fit:cover;
   filter:blur(10px);transform:scale(1.07);transition:filter .3s ease}
 .triphero.skarp img{filter:none;transform:none}

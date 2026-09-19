@@ -15,7 +15,7 @@ const AUTH = {
 };
 const LS_KEY = 'resekartan.data', LS_AUTH = 'resekartan.unlocked', LS_SEEN = 'resekartan.inloggad', LS_LEGEND = 'resekartan.legend';
 const LS_FILTER = 'resekartan.filter';   // vilka resenärer som var valda sist, per enhet
-const APP_VERSION = 'v58';   // följ sw.js CACHE, så man ser vad som faktiskt körs
+const APP_VERSION = 'v59';   // följ sw.js CACHE, så man ser vad som faktiskt körs
 
 /* ============================ Tema ============================
    Temat är per enhet och ligger i localStorage, inte i DB – Hedvig ska kunna ha
@@ -1341,9 +1341,10 @@ function renderTrip(t){
   const places = t.stops.flatMap(s => (s.places||[]).map(p => p.name));
   body.innerHTML = `<div class="detail">
     <button class="back" data-back>‹ Tillbaka</button>
-    ${t.thumb ? `<div class="triphero" id="triphero" data-tripid="${esc(t.id)}">
+    ${t.thumb ? `<button type="button" class="triphero" id="triphero" data-tripid="${esc(t.id)}"
+      data-open="0" aria-label="Öppna bilderna från ${esc(t.title)}">
       <img src="${esc(t.thumb)}" alt="Omslagsbild från ${esc(t.title)}">
-      <span class="spin"></span></div>` : ''}
+      <span class="spin"></span></button>` : ''}
     <h2><span class="flag">${t.stops[0] ? flagOf(t.stops[0].iso) : '🏳️'}</span>${esc(t.title)}${t.planned ? '<span class="tag">Planerad</span>' : ''}${t.bo ? '<span class="tag">Bodde här</span>' : ''}</h2>
     <div class="meta">
       ${ICON.cal}<div>${span(t.start, t.end)} <span style="color:var(--ink-3)">· ${days(t)} dagar${
