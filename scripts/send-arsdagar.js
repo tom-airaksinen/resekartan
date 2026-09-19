@@ -84,14 +84,24 @@ function vilka(t, people){
   return namn.slice(0, -1).join(', ') + ' och ' + namn.at(-1);
 }
 
+/* Resans namn, inte landet. Oftast är de samma, men har man döpt resan till
+   "Sportlovet i Åre" är det den man minns – och landet står kvar i brödtexten,
+   så ingenting går förlorat. Priset är att ett namn inte alltid böjs snällt
+   efter "från"; det är en rimlig växling mot att få med det man själv skrev. */
+const resnamn = t => (t.title || '').trim() || landnamn(t.stops?.[0]?.iso);
+
 function notis(traffar, people, datum){
   if(traffar.length === 1){
     const { t, ar } = traffar[0];
     const orter = (t.stops || []).flatMap(s => (s.places || []).map(p => p.name)).filter(Boolean);
+    const land = landnamn(t.stops?.[0]?.iso);
     const d = dagar(t);
     return {
-      title: `I dag för ${arOrd(ar)} år sedan kom ${vilka(t, people)} hem från ${landnamn(t.stops?.[0]?.iso)}`,
-      body: [orter.slice(0, 4).join(', '), d ? `${d} ${d === 1 ? 'dag' : 'dagar'}` : ''].filter(Boolean).join(' · '),
+      title: `I dag för ${arOrd(ar)} år sedan kom ${vilka(t, people)} hem från ${resnamn(t)}`,
+      // Landet först: står det redan i namnet upprepas det inte
+      body: [resnamn(t).toLowerCase().includes(land.toLowerCase()) ? '' : land,
+             orter.slice(0, 4).join(', '),
+             d ? `${d} ${d === 1 ? 'dag' : 'dagar'}` : ''].filter(Boolean).join(' · '),
       url: `${BAS}#resa=${encodeURIComponent(t.id)}`
     };
   }
@@ -99,7 +109,7 @@ function notis(traffar, people, datum){
   const rubrik = (ORD[n] || n) + ' resor har årsdag i dag';
   return {
     title: rubrik.charAt(0).toUpperCase() + rubrik.slice(1),
-    body: traffar.map(({ t, ar }) => `${landnamn(t.stops?.[0]?.iso)} för ${arOrd(ar)} år sedan`).join(' · '),
+    body: traffar.map(({ t, ar }) => `${resnamn(t)} för ${arOrd(ar)} år sedan`).join(' · '),
     url: `${BAS}#arsdag=${datum}`
   };
 }
@@ -158,5 +168,5 @@ async function main(){
 
 // Reglerna går att testa utan Firebase: kör filen direkt så skickar den,
 // require:a den så får man bara funktionerna.
-module.exports = { arsdagarPa, notis, vilka, landnamn, arOrd, stockholm, dagar };
+module.exports = { arsdagarPa, notis, vilka, landnamn, resnamn, arOrd, stockholm, dagar };
 if(require.main === module) main().catch(e => { console.error(e); process.exit(1); });

@@ -13,18 +13,27 @@ GitHub Actions som cron, och `push`/`notificationclick` i service workern.
 resa, en avstickare, och ett år i Moskva – *"i dag för tio år sedan kom du hem
 från Ryssland"* fungerar även för ett boende, där "åkte till" hade låtit fel.
 
-**Landet, inte orten.** Ett landnamn är entydigt; en ort kräver att man minns
-vilken resa den hörde till.
+**Resans namn**, inte landet och inte orten. Oftast är namnet och landet samma
+sak, men har man döpt resan till "Sportlovet i Åre" är det den man minns. Landet
+står kvar i brödtexten – utom när det redan finns i namnet, då upprepas det inte.
+En resa utan namn faller tillbaka på landet.
+
+Priset är att ett namn inte alltid böjs snällt efter "från". *"Kom du hem från
+Moskva-året"* skaver lite. Det är en rimlig växling mot att få med det man själv
+skrev; ändrar vi oss är det raden `resnamn()` i sändaren.
 
 En resa den dagen:
 
 > **I dag för fem år sedan kom ni hem från Rumänien**
-> Bukarest och Brașov · 9 dagar
+> Bukarest, Brașov · 9 dagar
+
+> **I dag för fem år sedan kom ni hem från Sportlovet i Åre**
+> Sverige · Åre · 6 dagar
 
 Flera samma dag slås ihop till en:
 
 > **Två resor har årsdag i dag**
-> Rumänien för fem år sedan · Storbritannien för två
+> Rumänien för fem år sedan · Sportlovet i Åre för fem år sedan
 
 "Ni" när hela familjen var med, annars namnen. Avsändaren vet **inte** vem som
 håller i telefonen – en prenumeration är anonym – så "du" går inte att använda
