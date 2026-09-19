@@ -15,7 +15,7 @@ const AUTH = {
 };
 const LS_KEY = 'resekartan.data', LS_AUTH = 'resekartan.unlocked', LS_SEEN = 'resekartan.inloggad', LS_LEGEND = 'resekartan.legend';
 const LS_FILTER = 'resekartan.filter';   // vilka resenärer som var valda sist, per enhet
-const APP_VERSION = 'v56';   // följ sw.js CACHE, så man ser vad som faktiskt körs
+const APP_VERSION = 'v57';   // följ sw.js CACHE, så man ser vad som faktiskt körs
 
 /* ============================ Tema ============================
    Temat är per enhet och ligger i localStorage, inte i DB – Hedvig ska kunna ha
@@ -1292,6 +1292,12 @@ const statTiles = (s, cls = 'stats') => {
   <div class="stat"><div class="num">${s.trips}</div><span>resor</span></div>
   <div class="stat"><div class="num">${s.days}</div><span>${long ? 'dagar på resande fot' : 'resdagar'}</span></div></div>`;
 };
+/* Topp tre på en rad i Kul att veta. Ettan står i full svärta, tvåan och trean
+   dämpade – listan ska kunna läsas som ett svar och inte som en tabell. */
+const topp3 = (list, rad) => list.length
+  ? `<dd class="top3">${list.map(x => `<span>${rad(x)}</span>`).join('')}</dd>`
+  : '<dd>–</dd>';
+
 const seedNote = () => (usingSeed() && !CLOUD.on)
   ? '<p class="example">Exempeldata. Lägg in era egna resor under Resor → Ny resa.</p>' : '';
 
@@ -2248,13 +2254,18 @@ function renderViews(){
   // Dag för dag, så en resa över nyår hamnar på båda åren
   travelDays(list).forEach(d => { const y = d.slice(0, 4); years[y] = (years[y] || 0) + 1; });
   const maxY = Math.max(1, ...Object.values(years));
-  // Ett år i Moskva skulle annars vinna "längsta resan" för alltid, och det är
-  // inte samma sorts rekord. Boendena får en egen rad.
-  const longest = [...done(list)].filter(t => !t.bo).sort((a,b) => days(b) - days(a))[0];
-  const longestBo = [...done(list)].filter(t => t.bo).sort((a,b) => days(b) - days(a))[0];
+  /* Ett år i Moskva skulle annars vinna "längsta resan" för alltid, och det är
+     inte samma sorts rekord. Boendena får en egen rad.
+     Topp tre i stället för en enda: tvåan och trean är ofta det roliga, och en
+     ensam vinnare säger inget om hur nära det var. */
+  const sortLangd = (a, b) => days(b) - days(a) || a.title.localeCompare(b.title, 'sv');
+  const longest = done(list).filter(t => !t.bo && days(t)).sort(sortLangd).slice(0, 3);
+  const longestBo = done(list).filter(t => t.bo && days(t)).sort(sortLangd).slice(0, 3);
   const cc = {};
   done(list).forEach(t => { const i = t.stops[0]?.iso; if(i && !isHome(i)) cc[i] = (cc[i]||0) + 1; });
-  const most = Object.entries(cc).sort((a,b) => b[1] - a[1])[0];
+  const most = Object.entries(cc)
+    .sort((a, b) => b[1] - a[1] || countryName(a[0]).localeCompare(countryName(b[0]), 'sv'))
+    .slice(0, 3);
   const newest = (() => {
     const seen = new Set(); let last = '–';
     [...done(DB.trips)].sort((a,b) => (a.start||'').localeCompare(b.start||'')).forEach(t =>
@@ -2284,9 +2295,12 @@ function renderViews(){
     })()}
 
     <h2 class="sec">Kul att veta</h2><dl class="facts">
-      <dt>Längsta resan</dt><dd>${longest ? `${esc(longest.title)}, ${days(longest)} dagar` : '–'}</dd>
-      ${longestBo ? `<dt>Längsta vistelsen</dt><dd>${esc(longestBo.title)}, ${days(longestBo)} dagar</dd>` : ''}
-      <dt>Flest resor till</dt><dd>${most ? `${esc(countryName(most[0]))} (${most[1]})` : '–'}</dd>
+      <dt>Längsta ${longest.length === 1 ? 'resan' : 'resorna'}</dt>${topp3(longest,
+        t => `${esc(t.title)} <span class="v">${days(t)} dagar</span>`)}
+      ${longestBo.length ? `<dt>Längsta ${longestBo.length === 1 ? 'vistelsen' : 'vistelserna'}</dt>${topp3(longestBo,
+        t => `${esc(t.title)} <span class="v">${days(t)} dagar</span>`)}` : ''}
+      <dt>Flest resor till</dt>${topp3(most,
+        ([iso, n]) => `${flagOf(iso)} ${esc(countryName(iso))} <span class="v">${n}</span>`)}
       <dt>Senaste nya landet</dt><dd>${esc(newest)}</dd>
       <dt>Avstickare</dt><dd>${done(list).reduce((n,t) => n + t.stops.filter(x => x.side).length, 0)}</dd>
       <dt>Resor i ${esc(countryName(DB.home?.iso || '752'))}</dt><dd>${done(list).filter(t => t.stops.every(x => isHome(x.iso))).length}</dd>

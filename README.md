@@ -367,6 +367,17 @@ resa inuti en annan räknas redan bara en gång.
 annars vunnit det första för alltid, så boenden räknas bort därifrån och får en
 egen rad i Kul att veta – den visas bara när det finns ett boende inlagt.
 
+Båda raderna, och Flest resor till, visar **topp tre** i stället för en enda
+vinnare (`topp3()`): tvåan och trean är ofta det roliga, och en ensam vinnare
+säger inget om hur nära det var. Ettan står i full svärta, tvåan och trean
+dämpade och mindre, så raden fortfarande går att läsa som ett svar och inte som
+en tabell. Rubriken böjs efter antalet – "Längsta resan" när det bara finns en.
+
+CSS-fällan där: barnkombinatorn i `.facts dd.top3>span:not(:first-child)` är inte
+kosmetik. Utan `>` träffar regeln även `.v`-spannen inne i raderna, och då dämpas
+ettans siffra också – och den vinner dessutom på specificitet över regeln som
+skulle färga `.v`.
+
 Boendet syns bara i resedetaljen: etiketten "Bodde här" vid titeln och
 "· räknas inte som resdagar" efter dagantalet. Listorna och kartan behandlar det
 som vilken resa som helst.

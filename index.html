@@ -497,7 +497,15 @@ h2.sec:first-child{margin-top:8px}
 .topitem .track{grid-column:3 / -1;height:4px;border-radius:2px;background:var(--surface-2);overflow:hidden;margin-top:-2px}
 .topitem .fill{display:block;height:100%;background:var(--visited);border-radius:2px}
 .facts{display:grid;grid-template-columns:1fr auto;gap:8px 12px;font-size:14px;margin-top:8px}
+.facts{align-items:start}
 .facts dt{color:var(--ink-2)} .facts dd{margin:0;text-align:right;font-weight:500}
+/* Topp tre: ettan i full svärta, tvåan och trean dämpade och mindre */
+.facts dd.top3{display:flex;flex-direction:column;gap:3px;font-weight:400}
+/* Barnkombinatorn är inte kosmetik: utan den träffar :not(:first-child) även
+   .v-spannen inne i raderna, och då dämpas ettans siffra också. */
+.facts dd.top3>span:first-child{font-weight:600}
+.facts dd.top3>span:not(:first-child){color:var(--ink-2);font-size:13px}
+.facts dd.top3 .v{color:var(--ink-3);font-variant-numeric:tabular-nums;margin-left:3px}
 .example{font-size:12px;color:var(--ink-3);margin:14px 0 0}
 
 /* ---------- Redigering ---------- */
