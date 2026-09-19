@@ -572,6 +572,29 @@ På desktop står sökfältet framme hela tiden i stället för att slås på me
 förstoringsglas: där finns plats, och då behövs varken knappen eller Avbryt.
 `#top` slutar också före panelen, så ingenting i toppraden kan nå in under den.
 
+**Men sökfältet måste få krympa.** Med `width:320px;flex:none` svämmade raden över
+`#top` så fort namnet plus fältet blev bredare än utrymmet, och fältet la sig under
+sidopanelen – tydligast på en iPad i liggande läge. Nu står det `flex:1 1 220px`
+med `max-width:300px`, så det ger efter i stället för att bryta ut.
+
+### Panelens och flikradens bredd står på ett ställe
+
+`--panel` och `--rail` sätts i desktop-media-frågan, och allt som måste sluta före
+panelen (`#top`, `.zoom`, `#pickbar`) räknar ut sig själv ur `calc(var(--panel) +
+16px)`. Förut stod 420 och 436 inskrivna på fem ställen, och då glider siffrorna
+isär så fort en av dem ändras.
+
+Panelen är `clamp(340px, 32vw, 420px)`. Fast 420 var i överkant på en iPad – kartan
+är det man kom för – men på en stor skärm finns plats. Flikraden gick från 76 till
+68 px med etiketterna en halv punkt mindre; de får fortfarande plats utan att
+klippas, "Inställningar" inräknad. Vad det ger:
+
+| Fönster | Karta förut | Karta nu |
+| --- | --- | --- |
+| 920 px | 404 px | 512 px |
+| 1180 px (iPad liggande) | 684 px | 734 px |
+| 1366 px och uppåt | 870 px | 878 px |
+
 ### Arket har en egen historik
 
 `nav` är en stack av bildrutor: `{ sel, selCountry, tab }`. `showTrip()` och

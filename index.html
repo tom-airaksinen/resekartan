@@ -684,28 +684,35 @@ h2.sec:first-child{margin-top:8px}
 
 /* ---------- Desktop ---------- */
 @media (min-width:900px){
+  /* Panelens och flikradens bredd står på ett ställe. Allt som måste sluta före
+     panelen räknar ut sig själv ur --panel, annars glider siffrorna isär.
+     Panelen krymper med skärmen: på en iPad i liggande läge blev 420 px i
+     överkant, och kartan är det man kom för. */
+  :root{ --panel:clamp(340px, 32vw, 420px); --rail:68px; }
   #app{flex-direction:row}
   #stage{order:1}
-  #sheet{left:auto;right:0;top:0;width:420px;height:auto!important;border-radius:0;box-shadow:-6px 0 24px rgba(0,0,0,.08);border-left:1px solid var(--line)}
+  #sheet{left:auto;right:0;top:0;width:var(--panel);height:auto!important;border-radius:0;box-shadow:-6px 0 24px rgba(0,0,0,.08);border-left:1px solid var(--line)}
   .handle{display:none}
   .sheet-body{padding-top:16px}
   /* Toppraden ska aldrig nå in under sidopanelen */
-  #top{right:436px;flex-direction:row;align-items:center}
+  #top{right:calc(var(--panel) + 16px);flex-direction:row;align-items:center}
   /* Här finns plats: sökfältet står framme hela tiden bredvid namnet, utan knapp
-     att slå på det med och utan Avbryt att stänga det med. */
+     att slå på det med och utan Avbryt att stänga det med. Men det får krympa:
+     med fast bredd svämmade raden över #top och la sig under panelen så fort
+     namnet plus fältet blev bredare än utrymmet. */
   #searchBtn{display:none}
-  #top .searchrow{display:flex;width:320px;max-width:none;flex:none}
+  #top .searchrow{display:flex;flex:1 1 220px;width:auto;max-width:300px;min-width:0}
   #top .searchrow .cancel{display:none}
   #top.searching .toprow{display:flex}
   /* Resenärsmenyn ligger kvar under namnet i stället för att ta plats i raden */
   .whomenu{position:absolute;top:100%;margin-top:2px;left:calc(16px + env(safe-area-inset-left,0px))}
-  .zoom{display:flex;right:436px;top:16px}
-  #tabs{order:0;flex-direction:column;width:76px;border-top:0;border-right:1px solid var(--line);justify-content:flex-start;padding-top:14px}
-  #tabs button{flex:none;padding:12px 0}
-  .view{left:auto;width:420px;border-left:1px solid var(--line);padding-top:16px}
+  .zoom{display:flex;right:calc(var(--panel) + 16px);top:16px}
+  #tabs{order:0;flex-direction:column;width:var(--rail);border-top:0;border-right:1px solid var(--line);justify-content:flex-start;padding-top:14px}
+  #tabs button{flex:none;padding:12px 0;font-size:10px}
+  .view{left:auto;width:var(--panel);border-left:1px solid var(--line);padding-top:16px}
   .stats{grid-auto-flow:row;grid-template-columns:1fr 1fr;overflow:visible}
-  #editor{left:76px}
-  #pickbar{right:436px}
+  #editor{left:var(--rail)}
+  #pickbar{right:calc(var(--panel) + 16px)}
 }
 </style>
 
