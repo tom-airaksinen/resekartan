@@ -15,7 +15,7 @@ const AUTH = {
 };
 const LS_KEY = 'resekartan.data', LS_AUTH = 'resekartan.unlocked', LS_SEEN = 'resekartan.inloggad', LS_LEGEND = 'resekartan.legend';
 const LS_FILTER = 'resekartan.filter';   // vilka resenärer som var valda sist, per enhet
-const APP_VERSION = 'v66';   // följ sw.js CACHE, så man ser vad som faktiskt körs
+const APP_VERSION = 'v67';   // följ sw.js CACHE, så man ser vad som faktiskt körs
 
 /* ============================ Tema ============================
    Temat är per enhet och ligger i localStorage, inte i DB – Hedvig ska kunna ha
@@ -1316,23 +1316,48 @@ function defaultFrac(){
 /* Liggande 4:3 – rutan i listan är liggande, och det är de flesta resebilder
    också. THUMB_V räknas upp när formatet ändras, så omslag som redan ligger
    sparade görs om nästa gång resan öppnas. */
-const THUMB_W = 240, THUMB_H = 180, THUMB_V = 2;
+// v3: omslag gjorda före blankkollen nedan kan vara svarta rutor, och görs om
+const THUMB_W = 240, THUMB_H = 180, THUMB_V = 3;
 
-function makeThumb(url){
-  return new Promise(res => {
-    const img = new Image();
-    img.onload = () => {
-      // Beskär mitten, som object-fit:cover gör i rutan
-      const s = Math.max(THUMB_W / img.width, THUMB_H / img.height);
-      const w = img.width * s, h = img.height * s;
-      const cv = document.createElement('canvas');
-      cv.width = THUMB_W; cv.height = THUMB_H;
-      cv.getContext('2d').drawImage(img, (THUMB_W - w) / 2, (THUMB_H - h) / 2, w, h);
-      res(cv.toDataURL('image/jpeg', .6));
-    };
-    img.onerror = () => res(null);
-    img.src = url;
-  });
+/* En tom canvas sparad som JPEG blir en **svart** ruta, inte en genomskinlig, och
+   den ser ut som en riktig bild för allt annat i appen. Det var så ett omslag
+   kunde vara kolsvart medan galleriet visade Eiffeltornet.
+
+   Två orsaker till att canvasen blev tom, och båda är åtgärdade här:
+   `img.onload` betyder inte att bilden är avkodad – Safari kan rita ingenting
+   om man ritar direkt – och en bild utan mått ger `NaN` till `drawImage()`. */
+function blank(cv){
+  try {
+    const d = cv.getContext('2d').getImageData(0, 0, cv.width, cv.height).data;
+    // Var hundrade bildpunkt räcker för att avgöra om rutan är helsvart
+    for(let i = 0; i < d.length; i += 400){
+      if(d[i] > 8 || d[i + 1] > 8 || d[i + 2] > 8) return false;
+    }
+    return true;
+  } catch(e){ return false; }   // kan inte läsas – anta att den duger
+}
+
+async function makeThumb(url){
+  if(!url) return null;
+  const img = new Image();
+  img.src = url;
+  // decode() väntar tills bilden går att rita. onload gör inte det i Safari.
+  try {
+    if(img.decode) await img.decode();
+    else await new Promise((ok, nej) => { img.onload = ok; img.onerror = nej; });
+  } catch(e){ return null; }
+  const bw = img.naturalWidth || img.width, bh = img.naturalHeight || img.height;
+  if(!bw || !bh) return null;
+  // Beskär mitten, som object-fit:cover gör i rutan
+  const s = Math.max(THUMB_W / bw, THUMB_H / bh);
+  const w = bw * s, h = bh * s;
+  const cv = document.createElement('canvas');
+  cv.width = THUMB_W; cv.height = THUMB_H;
+  cv.getContext('2d').drawImage(img, (THUMB_W - w) / 2, (THUMB_H - h) / 2, w, h);
+  // Hellre ingen miniatyr än en svart. Utan omslag visas flaggan, och nästa gång
+  // resan öppnas görs ett nytt försök.
+  if(blank(cv)) return null;
+  return cv.toDataURL('image/jpeg', .6);
 }
 
 /* Uppdaterar raderna som redan står på skärmen. Den öppna resedetaljen ritas
@@ -1369,8 +1394,15 @@ async function syncThumb(tripId, list){
   } else {
     if(t.thumbOf === hero.id && t.thumb && t.thumbV === THUMB_V) return;
     const url = await makeThumb(hero.prev || hero.url);
-    if(!url) return;
-    t.thumb = url; t.thumbOf = hero.id; t.thumbV = THUMB_V;
+    if(!url){
+      // Misslyckades försöket och det som ligger inne är från en äldre version
+      // kan det vara just en svart ruta. Ta bort den – flaggan är bättre – och
+      // låt nästa öppning försöka igen.
+      if(!t.thumb || t.thumbV === THUMB_V) return;
+      delete t.thumb; delete t.thumbOf; delete t.thumbV;
+    } else {
+      t.thumb = url; t.thumbOf = hero.id; t.thumbV = THUMB_V;
+    }
   }
   saveDB();
   paintThumbRows(t);

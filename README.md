@@ -117,6 +117,27 @@ som är id:t den gjordes av) – inte bland bilderna. Det är med flit:
 `syncThumb()` håller den aktuell: efter uppladdning, borttagning, omordning och
 när ett galleri från före v19 öppnas första gången.
 
+**En tom canvas sparad som JPEG blir en svart ruta, inte en genomskinlig.** Det
+gjorde att ett omslag kunde vara kolsvart medan galleriet visade Eiffeltornet –
+och inget i appen kunde se skillnad, det var en giltig bild.
+
+Två orsaker till att canvasen blev tom, båda åtgärdade i v67:
+
+- `img.onload` betyder inte att bilden går att rita. Safari kan lämna canvasen
+  orörd om man ritar direkt i lyssnaren. Nu väntar `makeThumb()` på `decode()`.
+- En bild utan mått gav `NaN` till `drawImage()`, som då inte ritade något.
+
+Och eftersom teorier om Safari har varit fel förr kontrolleras resultatet:
+`blank()` läser var hundrade bildpunkt ur canvasen, och är allt svartare än 8
+sparas ingen miniatyr alls. Då visas flaggan, och nästa gång resan öppnas görs ett
+nytt försök. Priset är att ett verkligt kolsvart foto aldrig blir omslag – en bra
+affär mot att en svart ruta ser ut som ett fel i appen.
+
+`THUMB_V` är uppräknad till 3, så omslag gjorda före kollen görs om nästa gång
+resan öppnas. Misslyckas det nya försöket **och** det som ligger inne är från en
+äldre version kastas det – det kan vara just en svart ruta. Ett aktuellt omslag
+rörs inte av ett misslyckat försök.
+
 ### Herobilden i resedetaljen
 
 Öppnar man en resa med bilder ligger omslaget stort överst, i en 3:2-ruta som
