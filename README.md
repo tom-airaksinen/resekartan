@@ -128,6 +128,12 @@ Den halva sekunden är med flit: originalet ska inte konkurrera om nätet med de
 rutnät man faktiskt tittar på. Blurren tas bort så fort 400 px-versionen är inne,
 inte när originalet är det – annars står bilden och ser suddig ut i onödan.
 
+**Arket börjar alltid överst.** Att skriva om `#sheetBody` nollställer inte
+skrollningen av sig självt. Öppnade man en resa från en nedskrollad lista –
+träfflistan i sökningen, Alla resor – började detaljen mitt i, och herobilden
+var avklippt innan man hunnit se den. `renderSheet()` sätter därför
+`scrollTop = 0`.
+
 Går bildhämtningen fel tas blurren och snurran bort ändå, så rutan inte blir
 stående och snurrar. Finns ingen `thumb` ritas ingen hero alls; resan får den
 nästa gång den öppnas, för då har `syncThumb()` hunnit skapa miniatyren.

@@ -15,7 +15,7 @@ const AUTH = {
 };
 const LS_KEY = 'resekartan.data', LS_AUTH = 'resekartan.unlocked', LS_SEEN = 'resekartan.inloggad', LS_LEGEND = 'resekartan.legend';
 const LS_FILTER = 'resekartan.filter';   // vilka resenärer som var valda sist, per enhet
-const APP_VERSION = 'v55';   // följ sw.js CACHE, så man ser vad som faktiskt körs
+const APP_VERSION = 'v56';   // följ sw.js CACHE, så man ser vad som faktiskt körs
 
 /* ============================ Tema ============================
    Temat är per enhet och ligger i localStorage, inte i DB – Hedvig ska kunna ha
@@ -1297,6 +1297,11 @@ const seedNote = () => (usingSeed() && !CLOUD.on)
 
 function renderSheet(){
   sheet.classList.remove('detail', 'country');
+  /* Att skriva om innehållet nollställer inte skrollningen – står man nedskrollad
+     i reselistan och öppnar en resa därifrån börjar detaljen mitt i, och
+     herobilden är avklippt innan man ens hunnit se den. Arket börjar alltid
+     överst. */
+  body.scrollTop = 0;
   setSheet(.5);
   if(sel){ const t = DB.trips.find(x => x.id === sel); if(t) return renderTrip(t); sel = null; }
   if(selCountry) return renderCountry(selCountry);
