@@ -85,23 +85,20 @@ function vilka(t, people){
 }
 
 /* Resans namn, inte landet. Oftast är de samma, men har man döpt resan till
-   "Sportlovet i Åre" är det den man minns – och landet står kvar i brödtexten,
-   så ingenting går förlorat. Priset är att ett namn inte alltid böjs snällt
-   efter "från"; det är en rimlig växling mot att få med det man själv skrev. */
+   "Sportlovet i Åre" är det den man minns. En resa utan namn faller tillbaka på
+   landet. Priset är att ett namn inte alltid böjs snällt efter "från"; det är en
+   rimlig växling mot att få med det man själv skrev. */
 const resnamn = t => (t.title || '').trim() || landnamn(t.stops?.[0]?.iso);
 
 function notis(traffar, people, datum){
   if(traffar.length === 1){
     const { t, ar } = traffar[0];
-    const orter = (t.stops || []).flatMap(s => (s.places || []).map(p => p.name)).filter(Boolean);
-    const land = landnamn(t.stops?.[0]?.iso);
-    const d = dagar(t);
+    /* Ingen brödtext. Meningen är hela notisen, och en notis på en låst skärm
+       rymmer ändå bara ett par rader – orter, land och dagar trängde bara undan
+       det som betyder något. Resten står i appen, ett tryck bort. */
     return {
       title: `I dag för ${arOrd(ar)} år sedan kom ${vilka(t, people)} hem från ${resnamn(t)}`,
-      // Landet först: står det redan i namnet upprepas det inte
-      body: [resnamn(t).toLowerCase().includes(land.toLowerCase()) ? '' : land,
-             orter.slice(0, 4).join(', '),
-             d ? `${d} ${d === 1 ? 'dag' : 'dagar'}` : ''].filter(Boolean).join(' · '),
+      body: '',
       url: `${BAS}#resa=${encodeURIComponent(t.id)}`
     };
   }

@@ -22,15 +22,17 @@ Priset är att ett namn inte alltid böjs snällt efter "från". *"Kom du hem fr
 Moskva-året"* skaver lite. Det är en rimlig växling mot att få med det man själv
 skrev; ändrar vi oss är det raden `resnamn()` i sändaren.
 
-En resa den dagen:
+En resa den dagen är **bara meningen** – ingen brödtext:
 
 > **I dag för fem år sedan kom ni hem från Rumänien**
-> Bukarest, Brașov · 9 dagar
 
 > **I dag för fem år sedan kom ni hem från Sportlovet i Åre**
-> Sverige · Åre · 6 dagar
 
-Flera samma dag slås ihop till en:
+Orter, land och antal dagar provades i brödtexten men togs bort: en notis på en
+låst skärm rymmer ändå bara ett par rader, och detaljerna trängde undan det som
+betyder något. Resten står i appen, ett tryck bort.
+
+Flera samma dag slås ihop till en, och där **är** listan innehållet:
 
 > **Två resor har årsdag i dag**
 > Rumänien för fem år sedan · Sportlovet i Åre för fem år sedan
