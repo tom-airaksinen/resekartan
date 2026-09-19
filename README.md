@@ -694,6 +694,35 @@ så en start får alltid senaste koden.
 Byter man typsnitt måste adressen uppdateras på båda ställena: `index.html` och
 `FONT_CSS` i `sw.js`.
 
+### Ny version tas emot utan att man tvingar fram avslut
+
+Symtomet var att man fick avsluta appen två gånger för att få den nya koden. Tre
+saker saknades:
+
+- **`updateViaCache: 'none'` vid registreringen.** Utan den får webbläsaren
+  servera *sw.js själv* ur HTTP-cachen, och GitHub Pages sätter max-age. Då
+  upptäcks en ny version aldrig, hur ofta man än frågar.
+- **En kontroll när appen kommer i förgrunden.** En timme mellan försöken räcker
+  inte för en app man öppnar en minut åt gången.
+- **En omladdning när den nya arbetaren tagit över.** Den togs medvetet bort en
+  gång, med motiveringen att koden ändå går nätverket först. Det stämmer för en
+  *ny* start – men den redan öppna sidan kör förstås kvar sin gamla kod tills
+  något laddar om den.
+
+Omladdningen sker bara när det är ofarligt: inte mitt i en redigering, en import,
+en bildvisning, ett drag eller en kartpekning (`sakertAttLaddaOm()`). Är något av
+det uppe väntar den, och `closeEditor()`, `closeViewer()` och `closeImport()`
+frågar igen när de stänger.
+
+Var man var sparas i `sessionStorage` och återställs efteråt, så en uppdatering
+inte kastar ut en ur resan man tittade på. En notislänk går före den platsen.
+`sessionStorage` överlever en omladdning i samma flik men är tom vid en äkta
+kallstart, så en gammal plats kan inte spöka.
+
+Låsskärmen säger **"Uppdaterar till senaste versionen …"** direkt i stället för
+efter 1,2 sekunder som vid en vanlig start – väntan är ju väntad då. Kortet hoppar
+inte, för statusraden tar alltid sin plats med `visibility`, aldrig `display`.
+
 ### Låsskärmen är också startbilden
 
 Formuläret ligger dolt i markupen och visas först när någon faktiskt behöver logga
@@ -936,8 +965,21 @@ alltid står utskrivet där det spelar roll. I den kompakta avatarraden visas fa
 som brickor och resten som "+N" – annars går två gäster med samma initial inte att
 skilja åt.
 
-Under Inställningar finns en säkerhetskopia: hela datat som text att kopiera undan
-eller klistra tillbaka.
+### Inställningarnas ordning
+
+Det man faktiskt ändrar först, det man ställer in en gång i mitten, och tekniken
+hopfälld längst ned:
+
+1. **Notiser** – är de av visas en inbjudan i stället för en kryssruta bland andra.
+   Funktionen är svår att upptäcka och lätt att vilja ha.
+2. **Utseende**
+3. **Hemort**, **Resenärer** – sätts en gång och rörs sällan
+4. **Avancerat och felsökning** (`<details>`, hopfälld) – version, lagring,
+   säkerhetskopia, lösenord, logga ut, hämta senaste versionen
+
+Rutan blandade förut notiser och tema med säkerhetskopior och lösenordshashar, och
+då hittar man ingetdera. Säkerhetskopian – hela datat som text att kopiera undan
+eller klistra tillbaka – ligger kvar under Avancerat.
 
 ### Årsdagsnotiser
 

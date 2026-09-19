@@ -15,7 +15,7 @@ const AUTH = {
 };
 const LS_KEY = 'resekartan.data', LS_AUTH = 'resekartan.unlocked', LS_SEEN = 'resekartan.inloggad', LS_LEGEND = 'resekartan.legend';
 const LS_FILTER = 'resekartan.filter';   // vilka resenärer som var valda sist, per enhet
-const APP_VERSION = 'v69';   // följ sw.js CACHE, så man ser vad som faktiskt körs
+const APP_VERSION = 'v70';   // följ sw.js CACHE, så man ser vad som faktiskt körs
 
 /* ============================ Tema ============================
    Temat är per enhet och ligger i localStorage, inte i DB – Hedvig ska kunna ha
@@ -83,15 +83,19 @@ const setSett = v => { try { v ? localStorage.setItem(LS_SEEN, '1') : localStora
 /* Texten dyker upp först efter en stund. Går starten fort ser man bara loggan
    och sedan kartan, i stället för tre rader text som hinner avlösa varandra. */
 let statusTimer = null;
-function lockStatus(text){
+function lockStatus(text, direkt){
   const box = document.getElementById('pwStatus');
   if(!box) return;
   clearTimeout(statusTimer);
   if(!text){ box.classList.remove('pa'); return; }
   document.getElementById('pwStatusText').textContent = text;
   if(box.classList.contains('pa')) return;      // redan framme, byt bara texten
-  // 1,2 s: en vanlig start hinner bli klar innan dess, och då syns ingen text alls
-  statusTimer = setTimeout(() => box.classList.add('pa'), 1200);
+  // Efter en uppdatering ska texten synas med en gång – då är väntan väntad.
+  // Annars 1,2 s: en vanlig start hinner bli klar innan dess, och då syns ingen
+  // text alls. Raden tar sin plats oavsett (visibility, inte display), så
+  // kortet växer aldrig mitt i starten.
+  if(direkt) box.classList.add('pa');
+  else statusTimer = setTimeout(() => box.classList.add('pa'), 1200);
 }
 /* Låsskärmen ligger kvar tills första ritningen är klar. Annars står man en stund
    framför en tom app och undrar om den hängt sig – och kraschar uppstarten blir det
@@ -103,8 +107,8 @@ function openApp(){
   requestAnimationFrame(() => requestAnimationFrame(() => {
     try {
       start();
-      // Kom man hit från en notis ska rätt resa stå framme direkt
-      try { oppnaFranAdress(); } catch(e){ console.error('notislänk:', e); }
+      // En notislänk går före den plats man var på innan en uppdatering
+      try { if(!oppnaFranAdress()) aterstallPlats(); } catch(e){ console.error('återgång:', e); }
       lockStatus('');
       lockEl.classList.add('klar');
       setTimeout(() => { lockEl.hidden = true; lockEl.classList.remove('klar'); }, 260);
@@ -1982,7 +1986,7 @@ function openViewer(i){
   if(!phCache[i]) return;
   vIdx = i; viewerEl.hidden = false; paintViewer();
 }
-function closeViewer(){ viewerEl.hidden = true; nollstallZoom(false); }
+function closeViewer(){ viewerEl.hidden = true; nollstallZoom(false); kanskeLaddaOm(); }
 /* Originalen för den här sessionen. Bläddrar man fram och tillbaka ska samma
    bild inte hämtas om. */
 const fullCache = new Map();
@@ -2660,9 +2664,7 @@ document.addEventListener('click', e => {
    görs mot verkligheten och inte mot en känsla. */
 function notisAvsnitt(){
   const val = notisVal();
-  const rubrik = `<h2 class="sec">Notiser</h2>
-    <p class="subtle">En påminnelse på årsdagen av en avslutad resa – "i dag för fem år
-    sedan kom ni hem från Rumänien". Skickas vid 16-tiden.</p>`;
+  const rubrik = `<h2 class="sec">Notiser</h2>`;
   if(!pushStods())
     return rubrik + '<p class="hint">Den här webbläsaren kan inte ta emot notiser.</p>';
   if(kraverHemskarm())
@@ -2678,10 +2680,18 @@ function notisAvsnitt(){
     style="--pc:${personColor(p.id)}" aria-pressed="${val.personer.includes(p.id)}">${av(p.id)}${esc(p.name)}${TICK}</button>`).join('');
   const n = val.personer.length ? notisAntal(val.lage, val.personer) : 0;
 
+  if(!val.pa) return rubrik + `<div class="pitch">
+    <p class="rub">Bli påmind om era resor</p>
+    <p>"I dag för fem år sedan kom ni hem från Rumänien." En notis på årsdagen av en
+    avslutad resa, med en väg rakt in i resan och bilderna.</p>
+    <label class="check"><input type="checkbox" id="pushOn"> Slå på för den här enheten</label>
+    <p class="hint">Skickas vid 16-tiden. Varje telefon och padda väljer själv.</p>
+  </div>`;
+
   return rubrik + `
-    <div class="field"><label class="check"><input type="checkbox" id="pushOn" ${val.pa ? 'checked' : ''}>
+    <div class="field"><label class="check"><input type="checkbox" id="pushOn" checked>
       Skicka årsdagsnotiser till den här enheten</label></div>
-    ${val.pa ? `
+    <p class="hint" style="margin-top:-4px">Skickas vid 16-tiden.</p>
     <label class="fl">Hur ofta</label>
     <div class="lagen">${Object.entries(LAGEN).map(kort).join('')}</div>
     <p class="hint">${val.personer.length
@@ -2689,7 +2699,7 @@ function notisAvsnitt(){
       : 'Kryssa i minst en person – annars skickas ingenting.'}</p>
     <label class="fl" style="margin-top:14px">Resor där någon av dessa var med</label>
     <div class="chips">${brickor}</div>
-    <div class="actions"><button type="button" class="btn ghost" id="pushTest">Skicka en testnotis</button></div>` : ''}`;
+    <div class="actions"><button type="button" class="btn ghost" id="pushTest">Skicka en testnotis</button></div>`;
 }
 
 /* ============================ Inställningar ============================ */
@@ -2708,7 +2718,12 @@ function renderSettings(){
       <span class="prev"><i class="l1"></i><i class="l2"></i><i class="v1"></i><i class="v2"></i><span class="sh"></span></span>
       <span><b>${esc(t.name)}</b><small>${esc(t.desc)}</small></span>
       <span class="tick"><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg></span></button>`;
+  /* Ordningen: det man faktiskt ändrar först, det man ställer in en gång i
+     mitten, och tekniken hopfälld längst ned. Rutan blandade förut notiser och
+     tema med säkerhetskopior och lösenordshashar, och då hittar man inget. */
   document.getElementById('view-settings').innerHTML = `<h1>Inställningar</h1>
+    ${notisAvsnitt()}
+
     <h2 class="sec">Utseende</h2>
     <p class="subtle">Temat gäller bara den här enheten. Väljer du Hedvig här ändras ingenting i de andras appar.</p>
     <div class="themes">${Object.entries(TEMAN).map(temaKort).join('')}</div>
@@ -2749,7 +2764,8 @@ function renderSettings(){
       <span><b>${esc(k.name)}</b><small>${esc(k.title)} · ${esc(span(k.start, k.end))}</small></span>
       <span></span></button>`).join('')}</div>` : ''}
 
-    ${notisAvsnitt()}
+    <details class="avancerat">
+      <summary>Avancerat och felsökning</summary>
 
     <h2 class="sec">Den här versionen</h2>
     <dl class="facts">
@@ -2786,7 +2802,8 @@ function renderSettings(){
       <button class="btn ghost" id="refreshApp">Hämta senaste versionen</button>
     </div>
     <p class="hint">${useCloud() ? 'Loggar ut från familjens konto på den här enheten.' : 'Låser appen igen på den här enheten.'}</p>
-    <p class="example">Kartdata: Natural Earth 1:50m via world-atlas (public domain).</p>`;
+    <p class="example">Kartdata: Natural Earth 1:50m via world-atlas (public domain).</p>
+    </details>`;
   const dump = document.getElementById('dump');
   if(dump) dump.value = JSON.stringify(DB, null, 1);
 }
@@ -3054,7 +3071,7 @@ function renderCountryStep(q = ''){
       : ''}</div>
   </div>`;
 }
-function closeEditor(){ editor.hidden = true; draft = null; editingId = null; }
+function closeEditor(){ editor.hidden = true; draft = null; editingId = null; kanskeLaddaOm(); }
 function edBack(){
   if(edStep === 'country' && draft){ edStep = 'form'; changeIsoIndex = null; return renderEditor(); }
   closeEditor();
@@ -3838,7 +3855,7 @@ function openImport(){
   renderImport();
   setTimeout(() => document.getElementById('imText')?.focus(), 60);
 }
-function closeImport(){ importer.hidden = true; imRows = null; }
+function closeImport(){ importer.hidden = true; imRows = null; kanskeLaddaOm(); }
 document.getElementById('imClose').onclick = closeImport;
 
 function renderImport(){
@@ -4214,6 +4231,54 @@ function start(){
   addEventListener('resize', layout);
 }
 
+/* ============================ Ny version ============================
+   Symtomet var att man fick tvinga fram avslut två gånger för att få den nya
+   koden. Tre saker saknades:
+
+   1. `updateViaCache: 'none'` vid registreringen. Utan den får webbläsaren
+      servera **sw.js själv** ur HTTP-cachen, och GitHub Pages sätter max-age –
+      då upptäcks en ny version aldrig, hur ofta man än frågar.
+   2. En kontroll när appen kommer i förgrunden. En timme mellan försöken räcker
+      inte för en app man öppnar i en minut åt gången.
+   3. En omladdning när den nya arbetaren tagit över. Den togs medvetet bort en
+      gång, med motiveringen att koden ändå går nätverket först – men den redan
+      öppna sidan kör förstås kvar sin gamla kod tills något laddar om den.
+
+   Omladdningen sker bara när det är ofarligt: inte mitt i en redigering, en
+   import, en bildvisning eller ett drag. Var man var sparas och återställs, och
+   låsskärmen säger vad som händer i stället för att bara blinka förbi. */
+const LS_UPPD = 'resekartan.uppdaterad', LS_PLATS = 'resekartan.plats';
+let vantarNyVersion = false, laddarOm = false;
+
+const sakertAttLaddaOm = () => !appEl.hidden && editor.hidden && viewerEl.hidden
+  && askEl.hidden && importer.hidden && !phDrag.on && !pickTarget;
+
+function kanskeLaddaOm(){
+  if(!vantarNyVersion || laddarOm || !sakertAttLaddaOm()) return;
+  laddarOm = true;
+  try {
+    sessionStorage.setItem(LS_UPPD, '1');
+    sessionStorage.setItem(LS_PLATS, JSON.stringify({ tab, sel, selCountry, selArsdag }));
+  } catch(e){}
+  location.reload();
+}
+
+/* Tillbaka till samma plats efteråt. sessionStorage överlever en omladdning i
+   samma flik men är tom vid en äkta kallstart, så en gammal plats kan inte spöka. */
+function aterstallPlats(){
+  let p = null;
+  try {
+    const rå = sessionStorage.getItem(LS_PLATS);
+    if(rå){ sessionStorage.removeItem(LS_PLATS); p = JSON.parse(rå); }
+  } catch(e){}
+  if(!p) return false;
+  if(p.tab && p.tab !== 'karta') setTab(p.tab);
+  if(p.sel && DB.trips.some(t => t.id === p.sel)) showTrip(p.sel);
+  else if(p.selCountry) showCountry(p.selCountry);
+  else if(p.selArsdag) showArsdag(p.selArsdag);
+  return true;
+}
+
 /* Körs sist: start() rör kartans konstanter, som måste vara initialiserade först.
    Ingen try runt openApp – ett fel där ska synas, inte sväljas. */
 /* Ingen omladdning när en ny service worker tar över. Sidan och app.js går
@@ -4223,17 +4288,37 @@ function start(){
    det syntes som ett blink. */
 function registerSW(){
   if(!('serviceWorker' in navigator) || location.protocol === 'file:') return;
+  // Fanns ingen arbetare alls är det första installationen – inget att byta ut
+  const haddeArbetare = !!navigator.serviceWorker.controller;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if(!haddeArbetare) return;
+    vantarNyVersion = true;
+    kanskeLaddaOm();
+  });
   addEventListener('load', async () => {
     try {
-      const reg = await navigator.serviceWorker.register('sw.js');
-      reg.update();                       // leta efter ny version vid varje start
-      setInterval(() => reg.update(), 60 * 60 * 1000);
+      const reg = await navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' });
+      reg.update();
+      // En app man öppnar en minut åt gången hinner aldrig med en timmes intervall
+      addEventListener('visibilitychange', () => {
+        if(document.visibilityState !== 'visible') return;
+        reg.update();
+        kanskeLaddaOm();
+      });
+      setInterval(() => reg.update(), 15 * 60 * 1000);
     } catch(e){}
   });
 }
 
 (async function boot(){
   registerSW();
+  // Kommer vi tillbaka från en uppdatering ska det stå varför vi väntar
+  try {
+    if(sessionStorage.getItem(LS_UPPD)){
+      sessionStorage.removeItem(LS_UPPD);
+      lockStatus('Uppdaterar till senaste versionen …', true);
+    }
+  } catch(e){}
 
   if(!useCloud()){
     let unlocked = false;

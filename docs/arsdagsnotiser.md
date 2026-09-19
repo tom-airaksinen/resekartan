@@ -22,20 +22,25 @@ Priset är att ett namn inte alltid böjs snällt efter "från". *"Kom du hem fr
 Moskva-året"* skaver lite. Det är en rimlig växling mot att få med det man själv
 skrev; ändrar vi oss är det raden `resnamn()` i sändaren.
 
-En resa den dagen är **bara meningen** – ingen brödtext:
+En resa den dagen är **bara meningen**, med landets flagga sist:
 
-> **I dag för fem år sedan kom ni hem från Rumänien**
+> **I dag för fem år sedan kom ni hem från Rumänien 🇷🇴**
 
-> **I dag för fem år sedan kom ni hem från Sportlovet i Åre**
+> **I dag för fem år sedan kom ni hem från Sportlovet i Åre 🇸🇪**
 
-Orter, land och antal dagar provades i brödtexten men togs bort: en notis på en
-låst skärm rymmer ändå bara ett par rader, och detaljerna trängde undan det som
-betyder något. Resten står i appen, ett tryck bort.
+> **I dag för tio år sedan kom Tom hem från Moskva-året 🇷🇺**
 
-Flera samma dag slås ihop till en, och där **är** listan innehållet:
+Flaggan är resans **första** land; en avstickare får inte sin egen. Orter, land i
+klartext och antal dagar provades i brödtexten men togs bort – en notis på en låst
+skärm rymmer ändå bara ett par rader, och detaljerna trängde undan det som betyder
+något. Resten står i appen, ett tryck bort.
 
-> **Två resor har årsdag i dag**
-> Rumänien för fem år sedan · Sportlovet i Åre för fem år sedan
+Flera samma dag blir bara antalet:
+
+> **Två resor har årsdag i dag! 🥳**
+
+Listan med land och årtal fanns där först men klipptes mitt i på en iPhone. Den
+som är nyfiken är ett tryck från årsdagsvyn, där allt står.
 
 "Ni" när hela familjen var med, annars namnen. Avsändaren vet **inte** vem som
 håller i telefonen – en prenumeration är anonym – så "du" går inte att använda

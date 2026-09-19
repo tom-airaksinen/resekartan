@@ -26,6 +26,11 @@ const landnamn = iso => {
   const a = ISO[iso] && ISO[iso][0];
   try { return a ? regionName.of(a) : 'okänt land'; } catch(e){ return a || 'okänt land'; }
 };
+// Flaggan ur alpha-2, samma sätt som i appen: två regionindikatorer
+const flagga = iso => {
+  const a = ISO[iso] && ISO[iso][0];
+  return a ? String.fromCodePoint(...[...a].map(c => 127397 + c.charCodeAt(0))) : '';
+};
 
 // ---- Klockan i Sverige ----
 function stockholm(){
@@ -96,17 +101,20 @@ function notis(traffar, people, datum){
     /* Ingen brödtext. Meningen är hela notisen, och en notis på en låst skärm
        rymmer ändå bara ett par rader – orter, land och dagar trängde bara undan
        det som betyder något. Resten står i appen, ett tryck bort. */
+    const flg = flagga(t.stops?.[0]?.iso);
     return {
-      title: `I dag för ${arOrd(ar)} år sedan kom ${vilka(t, people)} hem från ${resnamn(t)}`,
+      title: `I dag för ${arOrd(ar)} år sedan kom ${vilka(t, people)} hem från ${resnamn(t)}${flg ? ' ' + flg : ''}`,
       body: '',
       url: `${BAS}#resa=${encodeURIComponent(t.id)}`
     };
   }
+  /* Flera samma dag: bara antalet. Listan med land och årtal fick inte plats på
+     en iPhone och klipptes mitt i – och den som är nyfiken är ett tryck bort. */
   const n = traffar.length;
-  const rubrik = (ORD[n] || n) + ' resor har årsdag i dag';
+  const rubrik = (ORD[n] || n) + ' resor har årsdag i dag!';
   return {
-    title: rubrik.charAt(0).toUpperCase() + rubrik.slice(1),
-    body: traffar.map(({ t, ar }) => `${resnamn(t)} för ${arOrd(ar)} år sedan`).join(' · '),
+    title: rubrik.charAt(0).toUpperCase() + rubrik.slice(1) + ' 🥳',
+    body: '',
     url: `${BAS}#arsdag=${datum}`
   };
 }
@@ -165,5 +173,5 @@ async function main(){
 
 // Reglerna går att testa utan Firebase: kör filen direkt så skickar den,
 // require:a den så får man bara funktionerna.
-module.exports = { arsdagarPa, notis, vilka, landnamn, resnamn, arOrd, stockholm, dagar };
+module.exports = { arsdagarPa, notis, vilka, landnamn, flagga, resnamn, arOrd, stockholm, dagar };
 if(require.main === module) main().catch(e => { console.error(e); process.exit(1); });

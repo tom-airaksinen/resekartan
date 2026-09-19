@@ -548,6 +548,24 @@ h2.sec:first-child{margin-top:8px}
    till ett ögonblick, annars ser trycket ut att inte ha gjort något. */
 .placerow .coord.vald{color:var(--accent);font-weight:600}
 /* Felsökningslogg för ortsökningen, se SOK_LOG_ON i app.js */
+/* Notiser när de är av: en inbjudan, inte en rad bland andra. Funktionen är
+   svår att upptäcka och lätt att vilja ha. */
+.pitch{border:1.5px solid var(--accent);border-radius:14px;padding:14px;background:var(--surface-2);margin-bottom:6px}
+.pitch .rub{margin:0 0 6px;font-weight:700;font-size:16px;color:var(--ink)}
+.pitch p{margin:0 0 10px;color:var(--ink-2);font-size:14px}
+.pitch .check{font-weight:600;color:var(--ink)}
+.pitch .hint{margin:8px 0 0}
+/* Tekniken hopfälld: säkerhetskopior och lösenordshashar ska inte ligga i vägen
+   för temat och notiserna. */
+.avancerat{margin-top:22px;border-top:1px solid var(--line);padding-top:6px}
+.avancerat>summary{list-style:none;cursor:pointer;padding:10px 0;font-weight:600;font-size:15px;
+  color:var(--ink-2);display:flex;align-items:center;gap:8px}
+.avancerat>summary::-webkit-details-marker{display:none}
+.avancerat>summary::before{content:"";width:8px;height:8px;border-right:2px solid currentColor;
+  border-bottom:2px solid currentColor;transform:rotate(-45deg);transition:transform .15s;margin-left:3px}
+.avancerat[open]>summary::before{transform:rotate(45deg)}
+.avancerat>summary:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:6px}
+
 /* Notislägen: ett val i tre steg, inte fyra kryssrutor */
 .lagen{display:grid;gap:8px;margin-bottom:10px}
 /* Alla tre barnen får sin ruta utpekad. Bocken hade bara grid-row, och rutnätet
