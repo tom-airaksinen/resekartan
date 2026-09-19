@@ -430,6 +430,9 @@ h2.sec:first-child{margin-top:8px}
 #viewer .vtop span{font-size:14px;opacity:.75}
 #viewer .vbtn{width:40px;height:40px;border-radius:50%;background:rgba(255,255,255,.14);color:#fff;display:grid;place-items:center}
 #viewer .vbtn svg{width:19px;height:19px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+/* uppdateraVisare() sätter disabled på pilarna i ändarna, men utan den här
+   regeln såg de likadana ut som en knapp som faktiskt gör något. */
+#viewer .vbtn:disabled{background:rgba(255,255,255,.05);color:rgba(255,255,255,.28);cursor:default}
 /* Tre rutor i ett spår: föregående, den man tittar på, och nästa. pan-y hindrar
    webbläsaren från att tolka svepet som sitt eget bakåtsvep. */
 /* touch-action:none, inte pan-y. Med pan-y tar webbläsaren nypningen själv och
