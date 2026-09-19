@@ -7,9 +7,15 @@ service cloud.firestore {
 
     // Familjens konton (Firebase-konsolen → Authentication → Users).
     // Lägg till fler uid i listan om någon ska få ett eget konto.
+    //
+    // Här ska också avsändaren av årsdagsnotiser stå. Den loggar in som en
+    // vanlig användare i stället för att använda en tjänstekontonyckel – dels
+    // för att organisationen förbjuder såna nycklar, dels för att en nyckel går
+    // förbi de här reglerna helt. Se docs/arsdagsnotiser.md.
     function familjen() {
       return [
         'NIek1TuzPkam53vMTkh4h8LbQjP2'
+        // , '<uid för notiser@tomairaksinen.se>'
       ];
     }
 

@@ -125,19 +125,35 @@ utan extra arbete.
 | `scripts/send-arsdagar.js` | läser resor och prenumerationer, skickar |
 | `.github/workflows/arsdagsnotiser.yml` | kör skriptet 14 och 15 UTC |
 
-Resorna ligger i Firestore, som inte har Realtime Databases genväg med en
-DB-secret över REST. Avsändaren använder därför **firebase-admin med ett
-tjänstekonto**. Det är den enda delen som inte finns i Flippa sedan tidigare.
+### Avsändaren loggar in som en användare, inte som ett tjänstekonto
+
+Första försöket använde `firebase-admin` med en tjänstekontonyckel. Google vägrade
+skapa nyckeln: organisationen förbjuder det (`Key creation is not allowed on this
+service account`). Det är en rimlig policy som inte ska slås av för ett
+familjeprojekt – och det visade sig vara rätt tvång.
+
+En tjänstekontonyckel går nämligen **förbi Firestore-reglerna** och gäller tills
+någon återkallar den. Sändaren behöver inte i närheten av så mycket. Nu loggar den
+in som en vanlig användare mot Firebase Auth och läser via Firestores REST-API,
+precis som appen – samma regler gäller, och kontot kan stängas av för sig.
+
+Skapa ett eget konto för det (Authentication → Users → Add user), lägg dess uid i
+`familjen()` i `firestore.rules` och publicera reglerna. Då slipper man att en
+ändring av familjens lösenord tystar notiserna.
+
+`firebase-admin` behövs inte längre; `web-push` är enda beroendet.
 
 ### Hemligheter i repot
 
 | Secret | Vad |
 | --- | --- |
 | `VAPID_PRIVATE` | privata halvan av nyckelparet; den publika står i `app.js` |
-| `FIREBASE_SERVICE_ACCOUNT` | tjänstekontots JSON, från Firebase-konsolen |
+| `FIREBASE_EMAIL` | avsändarens konto |
+| `FIREBASE_PASSWORD` | dess lösenord |
 
-Ingen av dem står i koden. Den publika VAPID-nyckeln är inte hemlig – den
-identifierar bara avsändaren för webbläsaren.
+Ingen av dem står i koden. Den publika VAPID-nyckeln och projektets API-nyckel är
+inte hemliga – de identifierar bara projektet, och det som skyddar datat är
+Firestore-reglerna.
 
 ## Att veta
 

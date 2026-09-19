@@ -1008,8 +1008,11 @@ reglerna går att testa med bara `node`: `firebase-admin` och `web-push` laddas
 först inne i `main()`, så `require('./scripts/send-arsdagar.js')` ger bara
 funktionerna.
 
-Två hemligheter behövs i repot: `VAPID_PRIVATE` och `FIREBASE_SERVICE_ACCOUNT`.
-Den publika VAPID-nyckeln står i `app.js` och är inte hemlig.
+Tre hemligheter behövs i repot: `VAPID_PRIVATE`, `FIREBASE_EMAIL` och
+`FIREBASE_PASSWORD`. Sändaren loggar in som en vanlig användare i stället för att
+använda en tjänstekontonyckel – organisationen förbjuder såna nycklar, och en
+nyckel hade dessutom gått förbi Firestore-reglerna helt. Kontots uid måste stå i
+`familjen()` i `firestore.rules`.
 
 ## Nästa steg
 

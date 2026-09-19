@@ -33,10 +33,11 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
-      - run: npm install web-push@3 firebase-admin@12 --no-save
+      - run: npm install web-push@3 --no-save
       - run: node scripts/send-arsdagar.js
         env:
           VAPID_PRIVATE: ${{ secrets.VAPID_PRIVATE }}
-          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          FIREBASE_EMAIL: ${{ secrets.FIREBASE_EMAIL }}
+          FIREBASE_PASSWORD: ${{ secrets.FIREBASE_PASSWORD }}
           TVINGA: ${{ inputs.tvinga && '1' || '' }}
           TORRKORNING: ${{ inputs.torrkorning && '1' || '' }}
