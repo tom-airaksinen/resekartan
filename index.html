@@ -169,7 +169,12 @@ label.fl{display:block;font-size:13px;font-weight:600;color:var(--ink-2);margin:
 #map .land.v1{fill:var(--v1)} #map .land.v2{fill:var(--v2)} #map .land.v3{fill:var(--v3)} #map .land.v4{fill:var(--v4)}
 #map .land.planned{fill:url(#hatch)}
 #map .land.hit{cursor:pointer}
-#map .link{fill:none;stroke:var(--pin-side);stroke-dasharray:3 3}
+/* Ingen stroke-dasharray här. Den skalas per zoomnivå i rescale() och sätts som
+   attribut, och CSS vinner över presentationsattribut – samma fälla som
+   stroke-width. Med mönstret låst i CSS blev ett streck 3 × zoomen långt, och
+   vid 170× syntes bara ett enda femhundra pixlar långt streck som slutade mitt
+   i havet. */
+#map .link{fill:none;stroke:var(--pin-side)}
 #map .pin circle{fill:var(--pin);stroke:var(--pin-ring);cursor:pointer}
 #map .pin.side circle{fill:var(--pin-side)}
 #map .pin.city circle{fill:var(--visited);stroke:var(--pin-ring)}

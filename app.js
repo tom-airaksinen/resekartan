@@ -15,7 +15,7 @@ const AUTH = {
 };
 const LS_KEY = 'resekartan.data', LS_AUTH = 'resekartan.unlocked', LS_SEEN = 'resekartan.inloggad', LS_LEGEND = 'resekartan.legend';
 const LS_FILTER = 'resekartan.filter';   // vilka resenärer som var valda sist, per enhet
-const APP_VERSION = 'v64';   // följ sw.js CACHE, så man ser vad som faktiskt körs
+const APP_VERSION = 'v65';   // följ sw.js CACHE, så man ser vad som faktiskt körs
 
 /* ============================ Tema ============================
    Temat är per enhet och ligger i localStorage, inte i DB – Hedvig ska kunna ha
@@ -953,7 +953,9 @@ function rescale(){
     d3.select(this).select('circle')
       .attr('r', (q.side ? 4.5 : q.city ? 5.5 : 6.5) * big * u).attr('stroke-width', 2 * u);
   });
-  d3.select('#links').selectAll('path').attr('stroke-width', 1.2 * u);
+  // Både bredden och streckmönstret måste följa zoomen; allt i #world skalas med k
+  d3.select('#links').selectAll('path')
+    .attr('stroke-width', 1.2 * u).attr('stroke-dasharray', `${3 * u} ${3 * u}`);
   d3.select('#countries').selectAll('path').attr('stroke-width', .5 * u);
   d3.select('#countries').selectAll('path.home,path.visited').attr('stroke-width', u);
   // Kustlinjens halo är ett grepp för världsvyn. Håller vi den lika bred på skärmen

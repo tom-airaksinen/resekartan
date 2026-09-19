@@ -712,6 +712,15 @@ CSS-regeln för `.land` eller `.clabel` vinner CSS, attributet ignoreras, och
 linjerna skalas med kartan – vid landvyns zoom blev de tio pixlar breda. Sätt
 aldrig `stroke-width` i CSS för element vars bredd `rescale()` styr.
 
+Fällan gäller **allt som mäts i användarenheter**, inte bara bredden. Streckade
+linjen till en avstickare hade `stroke-dasharray: 3 3` kvar i CSS medan bredden
+skalades som den skulle. Allt inne i `#world` skalas med `k`, så ett tre enheters
+streck blev `3 × k` skärmpixlar: vid 170× gångers zoom var ett enda streck femhundra
+pixlar långt, och linjen mellan Los Angeles och Tijuana såg ut som ett lösryckt
+sträck som slutade mitt i havet. Nu sätts dasharrayen i `rescale()` tillsammans med
+bredden. Mönstret i `#hatch` hade redan sin `patternTransform` skalad där – det var
+bara streckningen som glömts.
+
 **Versaler sitter högt i sin radbox.** Initialen i `.av` ligger i ett `<i>` som
 skjuts ned `.07em`, annars hamnar bokstaven ungefär en pixel ovanför cirkelns mitt.
 
