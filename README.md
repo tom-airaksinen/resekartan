@@ -47,17 +47,24 @@ hand, och loggan är en kopia av symbolen i `index.html`.
 
 **Skärmdumparna visar exempeldatat i `data/seed.js`, aldrig familjens riktiga
 resor.** Sidan är publik och repot är publikt, så det är inte en detalj att vara
-slarvig med. De tas om med headless Chrome mot en lokal kopia där
-`data/firebase-config.js` är tömd:
+slarvig med.
 
 ```sh
---window-size=500,1000 --force-prefers-reduced-motion=reduce
+scripts/skarmdumpar.sh                # bara appen
+scripts/skarmdumpar.sh ~/nagra-foton  # med bilder inlagda på Italien-resan
 ```
 
-Två saker som krävs för att de ska bli rätt: bredden golvas vid 500 i headless
-(mindre `--window-size` ger ändå 500 och en beskuren bild), och utan reducerad
-rörelse hinner kartans flygning inte bli klar – d3:s övergångar drivs inte av
-den virtuella tiden.
+Skriptet kopierar repot till en temporär mapp, tömmer `data/firebase-config.js`
+så appen kör på seed-datat, kör headless Chrome och skriver till `om/bilder/`.
+
+Två fällor som kostade en stund första gången, båda inbyggda i skriptet nu:
+
+- **Headless golvar bredden vid 500 px.** Ett mindre `--window-size` ger ändå 500,
+  och appen ritas då som på en liten padda. Den körs därför i en iframe på
+  393×852 som beskärs efteråt, så både format och layout blir en riktig telefon.
+- **`--force-prefers-reduced-motion` krävs**, annars hinner kartans flygning
+  aldrig bli klar: d3:s övergångar drivs inte av den virtuella tiden, och man får
+  en bild av världskartan där ett inzoomat land skulle stått.
 
 ## Status
 
