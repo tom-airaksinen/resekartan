@@ -15,7 +15,7 @@ const AUTH = {
 };
 const LS_KEY = 'resekartan.data', LS_AUTH = 'resekartan.unlocked', LS_SEEN = 'resekartan.inloggad', LS_LEGEND = 'resekartan.legend';
 const LS_FILTER = 'resekartan.filter';   // vilka resenärer som var valda sist, per enhet
-const APP_VERSION = 'v57';   // följ sw.js CACHE, så man ser vad som faktiskt körs
+const APP_VERSION = 'v58';   // följ sw.js CACHE, så man ser vad som faktiskt körs
 
 /* ============================ Tema ============================
    Temat är per enhet och ligger i localStorage, inte i DB – Hedvig ska kunna ha
@@ -474,6 +474,9 @@ function linkName(url){
 }
 
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+// Går namnet att läsa för oss? Se geocode() – ortsökningen svarade förut med
+// ortens eget alfabet när det inte fanns något svenskt eller engelskt namn.
+const harLatin = s => /\p{Script=Latin}/u.test(String(s || ''));
 const av = id => `<span class="av${isCore(id) ? '' : ' guest'}" style="--pc:${personColor(id)}" title="${esc(personName(id))}"><i>${esc(personName(id)[0] || '?')}</i></span>`;
 // Bara familjen får varsin bricka; gäster samlas i en "+N" med namnen i title,
 // annars blir två gäster med samma initial omöjliga att skilja åt.
@@ -2332,6 +2335,14 @@ document.addEventListener('click', e => {
 /* ============================ Inställningar ============================ */
 function renderSettings(){
   const valt = temaNu();
+  /* Platser som sparades med ortens eget alfabet innan v58. De dyker upp i
+     topplistan över längst hemifrån och går inte att läsa, så de listas här med
+     en genväg till resan i stället för att man ska leta rätt på dem själv. */
+  const krumelurer = [];
+  DB.trips.forEach(t => t.stops.forEach(st => (st.places || []).forEach(p => {
+    if(p.name && !harLatin(p.name))
+      krumelurer.push({ id: t.id, title: t.title, start: t.start, end: t.end, iso: st.iso, name: p.name });
+  })));
   const temaKort = ([id, t]) => `<button type="button" class="tcard" data-tema="${id}" aria-pressed="${id === valt}"
       style="--t-sea:${t.prev.sea};--t-land:${t.prev.land};--t-vis:${t.prev.vis};--t-surf:${t.prev.surf};--t-acc:${t.prev.acc}">
       <span class="prev"><i class="l1"></i><i class="l2"></i><i class="v1"></i><i class="v2"></i><span class="sh"></span></span>
@@ -2368,6 +2379,15 @@ function renderSettings(){
     <div class="addp"><input type="text" id="newPerson" placeholder="t.ex. mormor Ingrid" aria-label="Ny resenär">
       <button class="btn ghost" id="addPerson">Lägg till</button></div>
     <div class="actions"><button class="btn" id="savePeople">Spara resenärer</button></div>
+    ${krumelurer.length ? `
+    <h2 class="sec">Ortnamn att rätta</h2>
+    <p class="subtle">De här platserna sparades med ortens eget alfabet, innan sökningen
+    började be om ett latinskt namn. Öppna resan, skriv namnet du känner igen och spara –
+    positionen ligger kvar.</p>
+    <div class="clist">${krumelurer.map(k => `<button class="trip" data-edit="${esc(k.id)}">
+      <span class="flag">${flagOf(k.iso)}</span>
+      <span><b>${esc(k.name)}</b><small>${esc(k.title)} · ${esc(span(k.start, k.end))}</small></span>
+      <span></span></button>`).join('')}</div>` : ''}
 
     <h2 class="sec">Den här versionen</h2>
     <dl class="facts">
@@ -3132,6 +3152,15 @@ const PLATSTYP = {
 };
 const platstyp = k => PLATSTYP[k] || (k ? String(k).replace(/_/g, ' ') : '');
 
+/* ---- Namn vi kan läsa ----
+   Både Nominatim och Photon svarar med ortens **lokala** namn när det inte finns
+   något på det språk man bett om. Sökte man Okinawa fick man 沖縄県 i listan, och
+   det var krumelurerna som sparades på resan – och dök upp i topplistan över
+   längst hemifrån. Samma sak i Etiopien.
+
+   Tre saker löser det: Nominatim får `accept-language=sv,en` så den faller
+   tillbaka på engelska i stället för på japanska, Photon får `lang=en`, och
+   dubbletterna nedan låter ett latinskt namn vinna över ett som inte är det. */
 function normPhoton(f){
   const p = f.properties, c = f.geometry?.coordinates;
   if(!c) return null;
@@ -3140,7 +3169,11 @@ function normPhoton(f){
            cc: (p.countrycode || '').toLowerCase(), kind: p.osm_value || '' };
 }
 function normNominatim(h){
-  return { name: h.name || h.display_name.split(',')[0], label: h.display_name,
+  // namedetails=1 ger alla namntaggar, så vi kan välja själva i stället för att
+  // lita på att Accept-Language tolkats som vi tänkte. int_name är sista utvägen.
+  const n = h.namedetails || {};
+  const namn = n['name:sv'] || n['name:en'] || h.name || n.int_name || h.display_name.split(',')[0];
+  return { name: namn, label: h.display_name,
            lat: +h.lat, lon: +h.lon,
            cc: (h.address?.country_code || '').toLowerCase(),   // kräver addressdetails=1
            kind: h.type || '' };
@@ -3150,10 +3183,10 @@ async function geocode(q, cc){
   // Nominatim först: den svarar med svenska namn, så den vinner när båda hittar
   // samma plats och dubbletten sorteras bort nedan.
   const calls = [
-    fetch(`https://nominatim.openstreetmap.org/search?format=jsonv2&addressdetails=1&limit=8&accept-language=sv&q=${enc}`
+    fetch(`https://nominatim.openstreetmap.org/search?format=jsonv2&addressdetails=1&namedetails=1&limit=8&accept-language=sv,en&q=${enc}`
           + (cc ? `&countrycodes=${cc}` : ''))
       .then(r => r.json()).then(d => (d || []).map(normNominatim)),
-    fetch(`https://photon.komoot.io/api/?q=${enc}&limit=8`)
+    fetch(`https://photon.komoot.io/api/?q=${enc}&limit=8&lang=en`)
       .then(r => r.json()).then(d => (d.features || []).map(normPhoton).filter(Boolean))
   ];
   const settled = await Promise.allSettled(calls);
@@ -3165,17 +3198,22 @@ async function geocode(q, cc){
     const inCountry = hits.filter(h => !h.cc || h.cc === cc);
     if(inCountry.length) hits = inCountry;
   }
-  const seen = new Set();
-  return hits.filter(h => {
-    if(!h.name) return false;
+  /* Samma plats från båda källorna slås ihop. Nominatim vinner normalt – den
+     svarar med svenska namn – men ett namn med latinska bokstäver vinner alltid
+     över ett utan, så källorna täcker upp för varandra där den ena bara har det
+     lokala namnet. Map behåller insättningsordningen när värdet byts ut, så
+     Nominatims träffar ligger kvar överst. */
+  const bast = new Map();
+  hits.forEach(h => {
+    if(!h.name) return;
     // En träff utan position går inte att välja. Bättre att den aldrig syns än
     // att ett tryck på den ser ut att inte göra något.
-    if(!isFinite(h.lat) || !isFinite(h.lon)) return false;
+    if(!isFinite(h.lat) || !isFinite(h.lon)) return;
     const key = h.lat.toFixed(2) + ',' + h.lon.toFixed(2);
-    if(seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  }).slice(0, 7);
+    const fanns = bast.get(key);
+    if(!fanns || (!harLatin(fanns.name) && harLatin(h.name))) bast.set(key, h);
+  });
+  return [...bast.values()].slice(0, 7);
 }
 
 function searchPlace(ref, q){

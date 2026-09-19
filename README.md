@@ -674,6 +674,31 @@ vilket håller sig väl inom Nominatims policy på max en förfrågan per sekund
 Betalalternativ som Google Places eller Mapbox behövs inte för den här
 användningen, och skulle kräva API-nyckel och kreditkort.
 
+**Namnet måste gå att läsa.** Båda källorna svarar med ortens **lokala** namn när
+det inte finns något på det språk man bett om. `accept-language=sv` gav därför
+沖縄県 för Okinawa och አዲስ አበባ för Addis Abeba – och det var de tecknen som
+sparades på resan och sedan dök upp i topplistan över längst hemifrån. Tre
+åtgärder, alla i `geocode()`:
+
+| | Förut | Nu |
+| --- | --- | --- |
+| Nominatim | `accept-language=sv` | `accept-language=sv,en` + `namedetails=1` |
+| Photon | inget språk | `lang=en` |
+| Dubbletter | Nominatim vann alltid | ett latinskt namn vinner över ett som inte är det |
+
+Svenskan går fortfarande först där den finns – Korsika heter Korsika och Addis
+Abeba heter Addis Abeba – engelskan är bara det som tar vid i stället för
+japanskan. `namedetails=1` låter oss välja `name:sv` → `name:en` → `name` →
+`int_name` själva i stället för att lita på att Accept-Language tolkats som vi
+tänkte. Photon kan bara de, en, fr och it, så `en` är det bästa som finns där.
+
+Platser som redan ligger sparade med fel alfabet listas under **Inställningar →
+Ortnamn att rätta**, med en genväg till resan. De rättas för hand: skriv namnet
+och spara, positionen ligger kvar eftersom bara textfältet ändras. Avsnittet
+visas bara när det finns något att rätta. Ingen automatisk omskrivning – att
+gissa om namn som redan står inskrivna är precis det sortens hjälpsamhet som
+förstör data.
+
 **Ett tryck på en träff kunde se ut att inte göra något.** Två orsaker, båda
 åtgärdade i v54:
 
