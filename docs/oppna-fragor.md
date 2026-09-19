@@ -52,3 +52,9 @@
 ## Bildvisaren
 - [x] Ska man kunna nypa för att zooma i bilderna, även om upplösningen är låg? → **Svar:** Ja, byggt 2026-09-19 (v60). Nyp, panorering med ett finger när man är inzoomad, och dubbeltryck för 2,5×. Taket är 6×; bilderna är 1400 px, så det blir grynigt – men att kunna gå nära är värt det. (2026-09-19)
 - [ ] När man svepar vid kanten av en inzoomad bild: ska svepet ta vid och byta bild? Kräver att man vet var bildens kant går inuti `object-fit: contain`, alltså bildens proportioner. Nu måste man zooma ut först. (2026-09-19)
+
+## Notiser
+- [x] Ska appen kunna skicka påminnelser om gamla resor? → **Svar:** Ja. Årsdagsnotiser byggda 2026-09-19 (v68): slutdatum, landnamn, "kom hem", tre lägen för hur ofta, kryssruta per person, klockan 16 svensk tid. Beslut och avvägningar i `docs/arsdagsnotiser.md`.
+- [ ] Lägg till `VAPID_PRIVATE` och `FIREBASE_SERVICE_ACCOUNT` som GitHub-secrets, annars kan sändaren inte köra. Den privata VAPID-nyckeln ligger i `~/resekartan-vapid-private.txt` på Toms dator. (2026-09-19)
+- [ ] Alla fyra behöver lägga till appen på hemskärmen från `resekartan.tomairaksinen.se` och slå på notiser – iPhone släpper bara in web push för den installerade appen. (2026-09-19)
+- [ ] Känns notisen rätt efter ett par månader, eller ska texten säga mer – antal platser, en bild? Web Push klarar en bild, men omslaget ligger som data-URL och skulle behöva en riktig adress. (2026-09-19)

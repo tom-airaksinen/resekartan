@@ -15,7 +15,7 @@ const AUTH = {
 };
 const LS_KEY = 'resekartan.data', LS_AUTH = 'resekartan.unlocked', LS_SEEN = 'resekartan.inloggad', LS_LEGEND = 'resekartan.legend';
 const LS_FILTER = 'resekartan.filter';   // vilka resenärer som var valda sist, per enhet
-const APP_VERSION = 'v67';   // följ sw.js CACHE, så man ser vad som faktiskt körs
+const APP_VERSION = 'v68';   // följ sw.js CACHE, så man ser vad som faktiskt körs
 
 /* ============================ Tema ============================
    Temat är per enhet och ligger i localStorage, inte i DB – Hedvig ska kunna ha
@@ -103,6 +103,8 @@ function openApp(){
   requestAnimationFrame(() => requestAnimationFrame(() => {
     try {
       start();
+      // Kom man hit från en notis ska rätt resa stå framme direkt
+      try { oppnaFranAdress(); } catch(e){ console.error('notislänk:', e); }
       lockStatus('');
       lockEl.classList.add('klar');
       setTimeout(() => { lockEl.hidden = true; lockEl.classList.remove('klar'); }, 260);
@@ -493,6 +495,7 @@ const stopEnd = (t, s) => s.end || t.end;
    Filtret är en mängd och betyder OCH: väljer man Tom och Karin visas resorna
    där båda var med, inte alla resor där någon av dem var med. Tom mängd = alla. */
 let filter = new Set(), tab = 'karta', sel = null, selCountry = null;
+let selArsdag = null;       // 'YYYY-MM-DD' när årsdagsvyn är uppe
 
 const inFilter = (t, s) => {
   if(!filter.size) return true;
@@ -1127,10 +1130,11 @@ function resetZoom(){ ease(svg).call(zoom.transform, d3.zoomIdentity); }
    bildruta minns vad som var öppet och vilken flik man kom från, så vägen
    tillbaka går hela sträckan: resa → land → fliken Länder. */
 const nav = [];
-const navLika = (a, b) => a.sel === b.sel && a.selCountry === b.selCountry && a.tab === b.tab;
+const navLika = (a, b) => a.sel === b.sel && a.selCountry === b.selCountry
+  && a.selArsdag === b.selArsdag && a.tab === b.tab;
 
 function navPush(){
-  const ruta = { sel, selCountry, tab };
+  const ruta = { sel, selCountry, selArsdag, tab };
   if(nav.length && navLika(nav.at(-1), ruta)) return;
   nav.push(ruta);
   if(nav.length > 20) nav.shift();       // ingen anledning att minnas längre bak
@@ -1140,7 +1144,7 @@ function navPush(){
 function goBack(){
   const f = nav.pop();
   if(!f) return clearSel();
-  sel = f.sel; selCountry = f.selCountry;
+  sel = f.sel; selCountry = f.selCountry; selArsdag = f.selArsdag || null;
   drawPins(); renderSheet();
   if(f.selCountry) flyToCountry(f.selCountry);
   else if(f.sel){ const t = DB.trips.find(x => x.id === f.sel); if(t) flyTo(t); else resetZoom(); }
@@ -1152,7 +1156,7 @@ function goBack(){
    klick på kartan och när filtret ändras. */
 function clearSel(){
   nav.length = 0;
-  sel = null; selCountry = null;
+  sel = null; selCountry = null; selArsdag = null;
   drawPins(); renderSheet(); resetZoom();
 }
 svg.on('click', () => { if(!pickTarget) clearSel(); });
@@ -1447,6 +1451,7 @@ function renderSheet(){
   setSheet(.5);
   if(sel){ const t = DB.trips.find(x => x.id === sel); if(t) return renderTrip(t); sel = null; }
   if(selCountry) return renderCountry(selCountry);
+  if(selArsdag) return renderArsdag(selArsdag);
   const list = visible(), sorted = [...list].sort(byDateDesc);
   const next = sorted.filter(t => t.planned).sort((a,b) => (a.start||'').localeCompare(b.start||''))[0];
   const past = sorted.filter(t => !t.planned);
@@ -2364,12 +2369,38 @@ function showTrip(id){
   const t = DB.trips.find(x => x.id === id);
   if(!t || sel === id) return;
   navPush();
-  sel = id; selCountry = null; setTab('karta'); drawPins(); renderSheet(); flyTo(t);
+  sel = id; selCountry = null; selArsdag = null; setTab('karta'); drawPins(); renderSheet(); flyTo(t);
 }
 function showCountry(iso){
   if(selCountry === iso && !sel) return;
   navPush();
-  selCountry = iso; sel = null; setTab('karta'); drawPins(); renderSheet(); flyToCountry(iso);
+  selCountry = iso; sel = null; selArsdag = null; setTab('karta'); drawPins(); renderSheet(); flyToCountry(iso);
+}
+/* Årsdagsvyn: flera resor har årsdag samma dag, och notisen leder hit i stället
+   för till en av dem. En enda resa länkas direkt till sig själv – en lista med
+   ett objekt i vore ett extra steg utan innehåll. */
+function showArsdag(datum){
+  if(selArsdag === datum && !sel && !selCountry) return;
+  navPush();
+  selArsdag = datum; sel = null; selCountry = null;
+  setTab('karta'); drawPins(); renderSheet(); resetZoom();
+}
+
+function renderArsdag(datum){
+  sheet.classList.remove('detail', 'country');
+  setSheet(.5);
+  const träffar = arsdagarPa(datum, 'allt', null).sort((a, b) => a.ar - b.ar);
+  const d = dt(datum);
+  body.innerHTML = `<div class="country">
+    <button class="back" data-back>‹ Tillbaka</button>
+    <h2>Årsdagar</h2>
+    <p>${isNaN(d) ? '' : esc(`${d.getDate()} ${MON[d.getMonth()]}`) + ' · '}${
+      träffar.length === 1 ? 'en resa' : `${träffar.length} resor`}</p>
+    ${träffar.map(({ t, ar }) => `<div class="arsrad">
+      <span class="ar">för ${esc(arOrd(ar))} år sedan</span>
+      ${tripRow(t)}</div>`).join('')
+      || '<p class="example">Inga resor har årsdag den dagen längre.</p>'}
+  </div>`;
 }
 async function removeTrip(id){
   const t = DB.trips.find(x => x.id === id);
@@ -2623,6 +2654,44 @@ document.addEventListener('click', e => {
   if(e.target.id === 'importTrips') openImport();
 });
 
+/* Inställningarnas notisruta. Tre lägen i stället för fyra kryssrutor – fyra
+   kryss är fyra beslut om något man inte har känsla för förrän notiserna
+   börjar komma. Siffran under alternativen räknas på era egna resor, så valet
+   görs mot verkligheten och inte mot en känsla. */
+function notisAvsnitt(){
+  const val = notisVal();
+  const rubrik = `<h2 class="sec">Notiser</h2>
+    <p class="subtle">En påminnelse på årsdagen av en avslutad resa – "i dag för fem år
+    sedan kom ni hem från Rumänien". Skickas vid 16-tiden.</p>`;
+  if(!pushStods())
+    return rubrik + '<p class="hint">Den här webbläsaren kan inte ta emot notiser.</p>';
+  if(kraverHemskarm())
+    return rubrik + `<p class="hint">Lägg till Resekartan på hemskärmen först. iPhone
+      släpper bara in notiser för den installerade appen – dela-knappen i Safari,
+      sedan "Lägg till på hemskärmen".</p>`;
+  if(!CLOUD.on)
+    return rubrik + '<p class="hint">Logga in mot molnet för att kunna slå på notiser.</p>';
+
+  const kort = ([id, l]) => `<button type="button" data-lage="${id}" aria-pressed="${val.lage === id}">
+    <b>${esc(l.namn)}</b><small>${esc(l.desc)}</small>${TICK}</button>`;
+  const brickor = family().map(p => `<button type="button" class="chip" data-pushperson="${esc(p.id)}"
+    style="--pc:${personColor(p.id)}" aria-pressed="${val.personer.includes(p.id)}">${av(p.id)}${esc(p.name)}${TICK}</button>`).join('');
+  const n = val.personer.length ? notisAntal(val.lage, val.personer) : 0;
+
+  return rubrik + `
+    <div class="field"><label class="check"><input type="checkbox" id="pushOn" ${val.pa ? 'checked' : ''}>
+      Skicka årsdagsnotiser till den här enheten</label></div>
+    ${val.pa ? `
+    <label class="fl">Hur ofta</label>
+    <div class="lagen">${Object.entries(LAGEN).map(kort).join('')}</div>
+    <p class="hint">${val.personer.length
+      ? `Det blir ${n === 0 ? 'ingen notis' : n === 1 ? 'en notis' : n + ' notiser'} det närmaste året.`
+      : 'Kryssa i minst en person – annars skickas ingenting.'}</p>
+    <label class="fl" style="margin-top:14px">Resor där dessa var med</label>
+    <div class="chips">${brickor}</div>
+    <div class="actions"><button type="button" class="btn ghost" id="pushTest">Skicka en testnotis</button></div>` : ''}`;
+}
+
 /* ============================ Inställningar ============================ */
 function renderSettings(){
   const valt = temaNu();
@@ -2679,6 +2748,8 @@ function renderSettings(){
       <span class="flag">${flagOf(k.iso)}</span>
       <span><b>${esc(k.name)}</b><small>${esc(k.title)} · ${esc(span(k.start, k.end))}</small></span>
       <span></span></button>`).join('')}</div>` : ''}
+
+    ${notisAvsnitt()}
 
     <h2 class="sec">Den här versionen</h2>
     <dl class="facts">
@@ -2844,6 +2915,10 @@ function searchHome(q){
   });
 }
 
+document.getElementById('view-settings').addEventListener('change', e => {
+  if(e.target.id === 'pushOn') e.target.checked ? slaPaNotiser() : slaAvNotiser();
+});
+
 document.getElementById('view-settings').addEventListener('input', e => {
   if(e.target.id !== 'setHomeName') return;
   const v = e.target.value;
@@ -2851,7 +2926,25 @@ document.getElementById('view-settings').addEventListener('input', e => {
   homeTimer = setTimeout(() => searchHome(v), SEARCH_WAIT);
 });
 
-document.getElementById('view-settings').addEventListener('click', e => {
+document.getElementById('view-settings').addEventListener('click', async e => {
+  const lage = e.target.closest('[data-lage]');
+  if(lage) return andraNotisVal({ lage: lage.dataset.lage });
+  const pp = e.target.closest('[data-pushperson]');
+  if(pp){
+    const val = notisVal(), id = pp.dataset.pushperson;
+    return andraNotisVal({ personer: val.personer.includes(id)
+      ? val.personer.filter(x => x !== id) : [...val.personer, id] });
+  }
+  if(e.target.closest('#pushTest')){
+    try {
+      const reg = await navigator.serviceWorker.ready;
+      await reg.showNotification('I dag för fem år sedan kom ni hem från Rumänien', {
+        body: 'Så här kommer en årsdagsnotis att se ut.',
+        icon: './icon-192.png', badge: './icon-192.png', tag: 'resekartan-test'
+      });
+    } catch(err){ toast('Kunde inte visa testnotisen.'); }
+    return;
+  }
   const b = e.target.closest('[data-home]');
   if(!b) return;
   const [lat, lon] = b.dataset.home.split(',').map(Number);
@@ -3922,6 +4015,176 @@ function isoByPosition(hit){
   const f = world.features.find(ft => d3.geoContains(ft, pt));
   return f ? f.id : null;
 }
+
+/* ============================ Årsdagsnotiser ============================
+   "I dag för fem år sedan kom ni hem från Rumänien." Beslut och avvägningar
+   står i docs/arsdagsnotiser.md; här ligger bara klientdelen. Avsändaren är
+   scripts/send-arsdagar.js, som körs av GitHub Actions.
+
+   Den publika VAPID-nyckeln är inte hemlig – den identifierar bara avsändaren
+   för webbläsaren. Den privata halvan ligger som GitHub-secret. */
+const VAPID_PUBLIC = 'BFhuKfDnP9P-LzD10zHVCEcFZzNiXyncDz_xYy36kvALo3M3DEEuM0ayTnTBMS0FQ20aB10lucZRExHQj81RRwQ';
+const LS_PUSH = 'resekartan.notiser';     // { pa, lage, personer } – spegel för gränssnittet
+const LS_ENHET = 'resekartan.enhet';      // slump-id, nyckeln i resekartan/data/push
+
+const LAGEN = {
+  sparsamt: { namn: 'Sparsamt', desc: '5, 10, 15, 20 år …' },
+  lagom:    { namn: 'Lagom',    desc: '1, 2 och 5 år, sedan vart femte' },
+  allt:     { namn: 'Allt',     desc: 'varje år' }
+};
+const ORD = ['noll','ett','två','tre','fyra','fem','sex','sju','åtta','nio','tio','elva','tolv'];
+const arOrd = n => ORD[n] || String(n);
+
+const notisVal = () => {
+  let o = {};
+  try { o = JSON.parse(localStorage.getItem(LS_PUSH) || '{}'); } catch(e){}
+  return { pa: !!o.pa, lage: LAGEN[o.lage] ? o.lage : 'lagom',
+           personer: Array.isArray(o.personer) ? o.personer : family().map(p => p.id) };
+};
+const setNotisVal = o => { try { localStorage.setItem(LS_PUSH, JSON.stringify(o)); } catch(e){} };
+function enhetsId(){
+  let id = null;
+  try { id = localStorage.getItem(LS_ENHET); } catch(e){}
+  if(!id){
+    id = 'e' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+    try { localStorage.setItem(LS_ENHET, id); } catch(e){}
+  }
+  return id;
+}
+
+const pushStods = () => 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+const paHemskarmen = () => matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+// iOS släpper bara in web push för appar som lagts till på hemskärmen (16.4+)
+const kraverHemskarm = () => /iPad|iPhone|iPod/.test(navigator.userAgent) && !paHemskarmen();
+
+/* ---- Vilka resor har årsdag ---- */
+const skottar = y => (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0;
+const resansFolk = t => [...new Set([...(t.who || []), ...t.stops.flatMap(s => s.who || [])])];
+
+const arsdagGaller = (ar, lage) => ar >= 1 && (
+  lage === 'allt' ? true :
+  lage === 'sparsamt' ? ar % 5 === 0 :
+  ar === 1 || ar === 2 || ar % 5 === 0);
+
+/* Resor vars **slutdatum** har årsdag på det givna datumet. Slutdatumet, inte
+   startdatumet: "kom hem" bär även ett år i Moskva, där "åkte till" hade låtit
+   fel. Resor utan slutdatum och planerade resor är aldrig med. */
+function arsdagarPa(datum, lage, personer){
+  const [y, m, d] = String(datum).split('-').map(Number);
+  if(!y) return [];
+  const ut = [];
+  DB.trips.forEach(t => {
+    if(t.planned || !t.end) return;
+    const [ey, em, ed] = t.end.split('-').map(Number);
+    // En resa som slutade 29 februari får sin årsdag den 28:e övriga år
+    const traff = (em === m && ed === d) || (em === 2 && ed === 29 && m === 2 && d === 28 && !skottar(y));
+    if(!traff) return;
+    const ar = y - ey;
+    if(!arsdagGaller(ar, lage)) return;
+    if(personer && personer.length && !resansFolk(t).some(id => personer.includes(id))) return;
+    ut.push({ t, ar });
+  });
+  return ut;
+}
+/* Hur många notiser valet faktiskt ger det närmaste året. Flera resor samma dag
+   blir en notis, så det är dagar med träff som räknas – inte resor. */
+function notisAntal(lage, personer){
+  const d = new Date();
+  let n = 0;
+  for(let i = 0; i < 365; i++){
+    d.setDate(d.getDate() + 1);
+    if(arsdagarPa(ymd(d), lage, personer).length) n++;
+  }
+  return n;
+}
+
+/* ---- Prenumerationen ---- */
+const b64ToBytes = b64 => {
+  const s = (b64 + '='.repeat((4 - b64.length % 4) % 4)).replace(/-/g, '+').replace(/_/g, '/');
+  const rå = atob(s), arr = new Uint8Array(rå.length);
+  for(let i = 0; i < rå.length; i++) arr[i] = rå.charCodeAt(i);
+  return arr;
+};
+const pushRef = () => CLOUD.mod.store.doc(CLOUD.db, 'resekartan', 'data', 'push', enhetsId());
+
+async function sparaPrenumeration(sub, val){
+  if(!CLOUD.on) throw new Error('offline');
+  await CLOUD.mod.store.setDoc(pushRef(), {
+    subscription: JSON.parse(JSON.stringify(sub)),
+    lage: val.lage, personer: val.personer, enabled: true,
+    ua: (navigator.userAgent || '').slice(0, 120),
+    updatedAt: new Date().toISOString()
+  });
+}
+
+async function slaPaNotiser(){
+  const val = notisVal();
+  if(!pushStods()) return toast('Notiser stöds inte i den här webbläsaren.');
+  if(kraverHemskarm()) return toast('Lägg till Resekartan på hemskärmen först – iPhone kräver det för notiser.');
+  if(!CLOUD.on) return toast('Notiser kräver att du är inloggad mot molnet.');
+  let lov;
+  try { lov = await Notification.requestPermission(); } catch(e){ lov = Notification.permission; }
+  if(lov !== 'granted'){
+    toast(lov === 'denied' ? 'Notiser är blockerade. Slå på dem i telefonens inställningar.' : 'Du sa nej till notiser.');
+    return renderSettings();
+  }
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    let sub = await reg.pushManager.getSubscription();
+    if(!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64ToBytes(VAPID_PUBLIC) });
+    await sparaPrenumeration(sub, val);
+    setNotisVal({ ...val, pa: true });
+    toast('Notiser är på. Nästa årsdag hör vi av oss.');
+  } catch(e){
+    toast('Kunde inte slå på notiser: ' + (e.message || e.code || 'okänt fel'));
+  }
+  renderSettings();
+}
+
+async function slaAvNotiser(){
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    const sub = await reg.pushManager.getSubscription();
+    if(sub) await sub.unsubscribe();
+  } catch(e){}
+  try { if(CLOUD.on) await CLOUD.mod.store.deleteDoc(pushRef()); } catch(e){}
+  setNotisVal({ ...notisVal(), pa: false });
+  renderSettings();
+}
+
+/* Ändrat läge eller ändrade personer. Är notiserna på ska molnet veta direkt,
+   annars sparas valet bara lokalt tills man slår på dem. */
+async function andraNotisVal(patch){
+  const val = { ...notisVal(), ...patch };
+  setNotisVal(val);
+  renderSettings();
+  if(!val.pa || !CLOUD.on) return;
+  try {
+    await CLOUD.mod.store.updateDoc(pushRef(), { lage: val.lage, personer: val.personer, updatedAt: new Date().toISOString() });
+  } catch(e){ toast('Valet sparades här men nådde inte molnet.'); }
+}
+
+/* ---- Notis-tryck ---- */
+/* Adressen bär vart trycket ska leda: #resa=<id> för en enda resa,
+   #arsdag=YYYY-MM-DD när flera hade årsdag samma dag. */
+function oppnaFranAdress(){
+  const h = location.hash || '';
+  const resa = h.match(/^#resa=(.+)$/), ars = h.match(/^#arsdag=(\d{4}-\d{2}-\d{2})$/);
+  if(!resa && !ars) return false;
+  history.replaceState(null, '', location.pathname + location.search);
+  if(resa) showTrip(decodeURIComponent(resa[1]));
+  else showArsdag(ars[1]);
+  return true;
+}
+addEventListener('hashchange', oppnaFranAdress);
+// Trycket kan komma medan appen redan är öppen – då skickar arbetaren hit i stället
+navigator.serviceWorker?.addEventListener?.('message', e => {
+  if(e.data?.type !== 'resekartan-oppna' || !e.data.url) return;
+  try {
+    const h = new URL(e.data.url, location.href).hash;
+    if(h){ location.hash = h; oppnaFranAdress(); }
+  } catch(err){}
+});
 
 /* ============================ Start ============================ */
 function refreshAll(){

@@ -939,6 +939,36 @@ skilja åt.
 Under Inställningar finns en säkerhetskopia: hela datat som text att kopiera undan
 eller klistra tillbaka.
 
+### Årsdagsnotiser
+
+*"I dag för fem år sedan kom ni hem från Rumänien."* En push-notis på årsdagen av
+en avslutad resa, med en väg rakt in i resan och dess bilder. Hela resonemanget –
+varför slutdatum och inte start, varför land och inte ort, varför tre lägen i
+stället för fyra kryssrutor – står i `docs/arsdagsnotiser.md`. Här bara var
+delarna ligger:
+
+| Var | Vad |
+| --- | --- |
+| `app.js` | inställningar, prenumeration, `arsdagarPa()`, årsdagsvyn, djuplänkar |
+| `sw.js` | `push` och `notificationclick` |
+| `resekartan/data/push/<enhet>` | prenumerationen, valda personer och läge |
+| `scripts/send-arsdagar.js` | läser resor och prenumerationer, skickar |
+| `.github/workflows/arsdagsnotiser.yml` | kör 14 och 15 UTC |
+
+Reglerna för vilka resor som har årsdag finns i **två** exemplar, ett i `app.js`
+och ett i sändaren. Det är med flit: klienten behöver dem för att kunna räkna ut
+hur många notiser ett läge ger, och sändaren kör i Node utan webbläsare. Ändrar
+man den ena måste den andra följa med – de är korta och står bredvid varandra i
+dokumentationen.
+
+Sändaren kan köras torrt från Actions-fliken (**Run workflow** → torrkörning), och
+reglerna går att testa med bara `node`: `firebase-admin` och `web-push` laddas
+först inne i `main()`, så `require('./scripts/send-arsdagar.js')` ger bara
+funktionerna.
+
+Två hemligheter behövs i repot: `VAPID_PRIVATE` och `FIREBASE_SERVICE_ACCOUNT`.
+Den publika VAPID-nyckeln står i `app.js` och är inte hemlig.
+
 ## Nästa steg
 
 Firebase, egen adress och foton per resa är på plats. Kvar står, i

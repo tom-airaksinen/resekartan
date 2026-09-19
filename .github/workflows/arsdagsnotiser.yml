@@ -1,0 +1,38 @@
+name: Årsdagsnotiser
+
+on:
+  schedule:
+    # Actions-cron är i UTC. Två körningar täcker sommar- och vintertid;
+    # skriptet gör bara något när klockan i Stockholm är 16.
+    - cron: "0 14 * * *"
+    - cron: "0 15 * * *"
+  workflow_dispatch:
+    inputs:
+      tvinga:
+        description: "Kör även om klockan inte är 16 i Stockholm"
+        type: boolean
+        default: true
+      torrkorning:
+        description: "Visa vad som skulle skickas, utan att skicka"
+        type: boolean
+        default: true
+
+concurrency:
+  group: arsdagsnotiser
+  cancel-in-progress: false
+
+jobs:
+  skicka:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - run: npm install web-push@3 firebase-admin@12 --no-save
+      - run: node scripts/send-arsdagar.js
+        env:
+          VAPID_PRIVATE: ${{ secrets.VAPID_PRIVATE }}
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          TVINGA: ${{ inputs.tvinga && '1' || '' }}
+          TORRKORNING: ${{ inputs.torrkorning && '1' || '' }}

@@ -17,7 +17,7 @@
       hämtade dem från nätet igen, och appnamnet blinkade när typsnittet kom
       efter texten. Nu ligger det som aldrig ändras (tredjepartsfiler med
       version i adressen) i en egen cache som överlever versionsbyten. */
-const CACHE  = 'resekartan-v67';      // appens egna filer, byts vid varje version
+const CACHE  = 'resekartan-v68';      // appens egna filer, byts vid varje version
 const STATIC = 'resekartan-static';   // typsnitt och bibliotek, överlever versionsbyten
 
 const SHELL = [
@@ -101,5 +101,39 @@ self.addEventListener('fetch', e => {
 
     if(wantFresh) return (await net) || cached || new Response('Offline', { status: 503 });
     return cached || (await net) || new Response('Offline', { status: 503 });
+  })());
+});
+
+/* ---- Årsdagsnotiser ----
+   Avsändaren är scripts/send-arsdagar.js; se docs/arsdagsnotiser.md. Adressen i
+   nyttolasten bär vart trycket ska leda: #resa=<id> för en enda resa,
+   #arsdag=YYYY-MM-DD när flera hade årsdag samma dag. */
+self.addEventListener('push', e => {
+  let d = {};
+  try { d = e.data ? e.data.json() : {}; } catch(err){ d = {}; }
+  const title = d.title || 'En resa har årsdag i dag';
+  e.waitUntil(self.registration.showNotification(title, {
+    body: d.body || '',
+    icon: './icon-192.png',
+    badge: './icon-192.png',
+    // Samma tagg varje dag: en ny notis ersätter gårdagens i stället för att
+    // lägga sig på hög.
+    tag: 'resekartan-arsdag',
+    data: { url: d.url || './' }
+  }));
+});
+
+self.addEventListener('notificationclick', e => {
+  e.notification.close();
+  const url = (e.notification.data && e.notification.data.url) || './';
+  e.waitUntil((async () => {
+    const oppna = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+    for(const c of oppna){
+      if(!('focus' in c)) continue;
+      // Appen är redan igång: säg åt den att byta vy i stället för att öppna ett fönster till
+      try { c.postMessage({ type: 'resekartan-oppna', url }); } catch(err){}
+      return c.focus();
+    }
+    if(self.clients.openWindow) return self.clients.openWindow(url);
   })());
 });
