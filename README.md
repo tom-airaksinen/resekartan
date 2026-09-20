@@ -198,6 +198,18 @@ träfflistan i sökningen, Alla resor – började detaljen mitt i, och herobild
 var avklippt innan man hunnit se den. `renderSheet()` sätter därför
 `scrollTop = 0`.
 
+**Herobilden följer bilderna, inte resans första ritning.** Raderade man omslaget
+låg det kvar stort i detaljvyn, och laddade man upp nya bilder till en resa som
+saknat omslag dök ingen hero upp förrän man öppnat resan på nytt. `visaHero()`
+anropas nu efter varje ändring – radering, uppladdning, omordning och inläsning –
+och skapar eller tar bort rutan själv. Har omslaget bytts börjar den om från
+miniatyren i stället för att låta den gamla bilden stå kvar tills originalet
+hunnit fram.
+
+Ordningen spelar roll: `syncThumb()` skapar omslaget och `visaHero()` läser det.
+Kördes de tvärtom fick en resa vars miniatyr görs vid första öppningen ingen
+herobild förrän man öppnat den en gång till.
+
 Går bildhämtningen fel tas blurren och snurran bort ändå, så rutan inte blir
 stående och snurrar. Finns ingen `thumb` ritas ingen hero alls; resan får den
 nästa gång den öppnas, för då har `syncThumb()` hunnit skapa miniatyren.
@@ -445,6 +457,20 @@ HTML5:s drag and drop finns inte på touch, så galleriet använder pointer-hän
 (`phDrag` i `app.js`). På telefonen startar ett långtryck på 260 ms draget; med mus
 räcker det att dra fem pixlar. Rör sig fingret mer än åtta pixlar innan långtrycket
 gått är det en skrollning, och draget avbryts.
+
+**Håll och dra flyttar bilden, håll och släpp öppnar en meny.** Två gester på
+samma tryck, men de går inte att förväxla: den ena rör sig, den andra inte. Rör
+sig fingret mer än åtta punkter medan draget är igång räknas det som ett drag och
+menyn kommer aldrig.
+
+Menyn ankras **ovanför** rutan, och bara när det inte finns plats där hamnar den
+under. Under fingret hade den varit skymd av handen precis när man ska välja. En
+pil pekar på rutan, och rutan får en ram, så det syns vilken bild det gäller.
+
+Två detaljer: trycket som öppnar menyn ger ett `click` strax efteråt, och det får
+inte stänga den igen – allt inom 400 ms räknas som samma tryck. Och på datorn är
+högerklick den gest som motsvarar ett långtryck, så `contextmenu` öppnar samma
+meny i stället för att bara sväljas.
 
 Tre fällor:
 

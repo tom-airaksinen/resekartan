@@ -399,6 +399,23 @@ h2.sec:first-child{margin-top:8px}
 .grid-ph .cover{display:none;position:absolute;left:5px;bottom:5px;padding:2px 8px;border-radius:999px;
   background:rgba(27,39,51,.62);color:#fff;font-size:10.5px;font-weight:600;backdrop-filter:blur(4px)}
 .grid-ph figure.hero .cover{display:block}
+/* Rutan som menyn gäller lyfts fram, annars vet man inte vilken bild man valt */
+.grid-ph figure.vald{outline:2.5px solid var(--accent);outline-offset:2px}
+
+/* ---------- Menyn vid långtryck på en bild ---------- */
+/* z-index 90: över galleriet och bildvisaren (80), under frågerutan (100) som
+   ska ligga överst när man bekräftar borttagningen. */
+.phmeny{position:fixed;z-index:90;min-width:184px;padding:4px;border-radius:13px;
+  background:var(--surface);border:1px solid var(--line);box-shadow:0 10px 30px rgba(0,0,0,.24)}
+.phmeny button{display:flex;align-items:center;gap:10px;width:100%;text-align:left;
+  padding:11px 12px;border-radius:9px;font-size:15px;font-weight:500;color:var(--danger)}
+.phmeny button:hover,.phmeny button:active{background:var(--surface-2)}
+.phmeny svg{width:18px;height:18px;flex:none;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round}
+/* Pilen pekar på rutan man höll på */
+.phmeny::after{content:"";position:absolute;left:var(--pil,50%);width:12px;height:12px;
+  background:var(--surface);transform:translateX(-50%) rotate(45deg)}
+.phmeny.upp::after{bottom:-7px;border-right:1px solid var(--line);border-bottom:1px solid var(--line)}
+.phmeny.ned::after{top:-7px;border-left:1px solid var(--line);border-top:1px solid var(--line)}
 .addph{display:flex;align-items:center;justify-content:center;gap:7px;aspect-ratio:1;border-radius:10px;
   border:1.5px dashed var(--line);color:var(--ink-2);font-size:13px;font-weight:600;flex-direction:column;text-align:center;padding:6px}
 .addph svg{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
@@ -891,6 +908,12 @@ h2.sec:first-child{margin-top:8px}
     </div>
   </div>
 </section>
+
+<div id="phMeny" class="phmeny" hidden role="menu" aria-label="Vad vill du göra med bilden?">
+  <button type="button" data-phdel role="menuitem">
+    <svg viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg>
+    Ta bort bilden</button>
+</div>
 
 <div id="ask" hidden role="dialog" aria-modal="true" aria-labelledby="askText">
   <div class="box"><p id="askText"></p><div class="row">
