@@ -15,7 +15,7 @@ const AUTH = {
 };
 const LS_KEY = 'resekartan.data', LS_AUTH = 'resekartan.unlocked', LS_SEEN = 'resekartan.inloggad', LS_LEGEND = 'resekartan.legend';
 const LS_FILTER = 'resekartan.filter';   // vilka resenärer som var valda sist, per enhet
-const APP_VERSION = 'v76';   // följ sw.js CACHE, så man ser vad som faktiskt körs
+const APP_VERSION = 'v77';   // följ sw.js CACHE, så man ser vad som faktiskt körs
 
 /* ============================ Tema ============================
    Temat är per enhet och ligger i localStorage, inte i DB – Hedvig ska kunna ha
@@ -1643,7 +1643,7 @@ function renderPhotos(){
    pointer-händelser: på telefonen startar ett långtryck draget, med mus räcker
    det att dra några pixlar. Rör sig fingret innan långtrycket hunnit gå är det
    en skrollning och draget avbryts. */
-const phDrag = { fig: null, on: false, armed: false, rörde: false, pending: false, timer: null, pid: null, x0: 0, y0: 0, bx: 0, by: 0, endedAt: 0, överZon: false };
+const phDrag = { fig: null, on: false, armed: false, pending: false, timer: null, pid: null, x0: 0, y0: 0, bx: 0, by: 0, endedAt: 0, överZon: false };
 
 /* ---- Släppzonen ----
    Drar man en bild uppåt dyker en papperskorg upp: antingen släpper man bilden
@@ -1722,7 +1722,7 @@ function phDragReset(){
   }
   clearTimeout(phDrag.timer);
   const väntade = phDrag.on && phDrag.pending;
-  phDrag.fig = null; phDrag.on = false; phDrag.armed = false; phDrag.rörde = false; phDrag.överZon = false; phDrag.timer = null;
+  phDrag.fig = null; phDrag.on = false; phDrag.armed = false; phDrag.överZon = false; phDrag.timer = null;
   if(väntade) renderPhotos();        // omritningen som sköts upp under draget
 }
 async function phDragEnd(){
@@ -1751,95 +1751,26 @@ async function phDragEnd(){
   await syncThumb(trip, phCache);
   await visaHero(trip, phCache);
 }
-/* ---- Menyn vid långtryck ----
-   Den får inte hamna under fingret – då ser man inte vad man väljer. Den ankras
-   därför **ovanför** rutan, och bara när det inte finns plats där hamnar den
-   under. Pilen pekar på rutan så det syns vilken bild det gäller. */
-const phMeny = document.getElementById('phMeny');
-let phMenyId = null, phMenyOppnad = 0;
-
-function visaPhMeny(fig){
-  const id = fig?.dataset.id;
-  if(!id || !phMeny) return;
-  phMenyId = id;
-  phMenyOppnad = Date.now();
-  phMeny.hidden = false;
-  document.querySelectorAll('#phGrid figure.vald').forEach(f => f.classList.remove('vald'));
-  fig.classList.add('vald');
-  const r = fig.getBoundingClientRect(), m = phMeny.getBoundingClientRect(), marg = 10;
-  const ovanfor = r.top - m.height - marg > 8;
-  phMeny.classList.toggle('upp', ovanfor);
-  phMeny.classList.toggle('ned', !ovanfor);
-  const x = Math.max(10, Math.min(r.left + r.width / 2 - m.width / 2, innerWidth - m.width - 10));
-  phMeny.style.left = x + 'px';
-  phMeny.style.top = (ovanfor ? r.top - m.height - marg : r.bottom + marg) + 'px';
-  phMeny.style.setProperty('--pil', (r.left + r.width / 2 - x) + 'px');
-  navigator.vibrate?.(8);
-}
-function stangPhMeny(){
-  if(!phMeny || phMeny.hidden) return;
-  phMeny.hidden = true;
-  phMenyId = null;
-  document.querySelectorAll('#phGrid figure.vald').forEach(f => f.classList.remove('vald'));
-}
-phMeny?.addEventListener('click', e => {
-  if(!e.target.closest('[data-phdel]')) return;
-  const id = phMenyId;
-  stangPhMeny();
-  if(id) removePhoto(id);
-});
-/* Trycket som öppnade menyn ger ett click strax efteråt, och det får inte stänga
-   den igen. Allt inom 400 ms räknas som samma tryck. */
-document.addEventListener('click', e => {
-  if(e.target.closest('#phMeny') || Date.now() - phMenyOppnad < 400) return;
-  stangPhMeny();
-}, true);
-addEventListener('scroll', stangPhMeny, true);
-addEventListener('resize', stangPhMeny);
-addEventListener('keydown', e => { if(e.key === 'Escape') stangPhMeny(); });
-
-/* iOS visar annars sin egen Dela/Spara-meny när man håller på en bild, och då
-   går ordningen inte att ändra. -webkit-touch-callout i index.html tar hand om
-   resten; den här fångar högerklick – på datorn är det den gest som motsvarar
-   ett långtryck, så där öppnar den vår egen meny i stället. */
-document.addEventListener('contextmenu', e => {
-  const fig = e.target.closest?.('#phGrid figure');
-  if(!fig) return;
-  e.preventDefault();
-  phDragReset();
-  visaPhMeny(fig);
-});
+// iOS visar annars sin egen Dela/Spara-meny när man håller på en bild, och då
+// går ordningen inte att ändra. -webkit-touch-callout i index.html tar hand om
+// resten; den här fångar högerklick och de fall där menyn ändå försöker fram.
+document.addEventListener('contextmenu', e => { if(e.target.closest?.('#phGrid figure')) e.preventDefault(); });
 document.addEventListener('pointerdown', e => {
   const fig = e.target.closest?.('#phGrid figure');
   if(!fig || e.button > 0) return;
   phDragReset();
-  stangPhMeny();
-  phDrag.fig = fig; phDrag.pid = e.pointerId; phDrag.x0 = e.clientX; phDrag.y0 = e.clientY; phDrag.rörde = false;
+  phDrag.fig = fig; phDrag.pid = e.pointerId; phDrag.x0 = e.clientX; phDrag.y0 = e.clientY;
   if(e.pointerType === 'mouse') phDrag.armed = true;
   else phDrag.timer = setTimeout(() => phDragStart(e.clientX, e.clientY), 260);
 });
 document.addEventListener('pointermove', e => {
   if(!phDrag.fig) return;
-  if(phDrag.on){
-    if(Math.hypot(e.clientX - phDrag.x0, e.clientY - phDrag.y0) > 8) phDrag.rörde = true;
-    phDragMove(e.clientX, e.clientY);
-    return;
-  }
+  if(phDrag.on){ phDragMove(e.clientX, e.clientY); return; }
   const far = Math.hypot(e.clientX - phDrag.x0, e.clientY - phDrag.y0);
   if(phDrag.armed){ if(far > 5) phDragStart(e.clientX, e.clientY); }
   else if(far > 8) phDragReset();          // fingret skrollar, inte drar
 });
-/* Håll och dra flyttar bilden. Håll och släpp utan att röra fingret är ett
-   långtryck, och då kommer menyn. Två gester på samma tryck, men de går inte
-   att förväxla: den ena rör sig, den andra inte. */
-document.addEventListener('pointerup', () => {
-  const langtryck = phDrag.on && !phDrag.rörde, id = phDrag.fig?.dataset.id;
-  if(phDrag.on) phDragEnd(); else phDragReset();
-  if(!langtryck || !id) return;
-  // Rutnätet kan ha ritats om av phDragEnd – hämta rutan på nytt
-  const fig = document.querySelector(`#phGrid figure[data-id="${CSS.escape(id)}"]`);
-  if(fig) visaPhMeny(fig);
-});
+document.addEventListener('pointerup', () => { if(phDrag.on) phDragEnd(); else phDragReset(); });
 document.addEventListener('pointercancel', phDragReset);
 // Pointer-händelser stoppar inte skrollningen på touch – det gör bara den här
 document.addEventListener('touchmove', e => { if(phDrag.on) e.preventDefault(); }, { passive: false });

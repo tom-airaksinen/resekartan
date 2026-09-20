@@ -473,20 +473,6 @@ i stället för där den låg. Släpper man på zonen ritas rutnätet om från `
 innan frågan ställs, av samma skäl: rutornas ordning i sidan säger ingenting när
 bilden släpptes utanför dem.
 
-**Håll och dra flyttar bilden, håll och släpp öppnar en meny.** Två gester på
-samma tryck, men de går inte att förväxla: den ena rör sig, den andra inte. Rör
-sig fingret mer än åtta punkter medan draget är igång räknas det som ett drag och
-menyn kommer aldrig.
-
-Menyn ankras **ovanför** rutan, och bara när det inte finns plats där hamnar den
-under. Under fingret hade den varit skymd av handen precis när man ska välja. En
-pil pekar på rutan, och rutan får en ram, så det syns vilken bild det gäller.
-
-Två detaljer: trycket som öppnar menyn ger ett `click` strax efteråt, och det får
-inte stänga den igen – allt inom 400 ms räknas som samma tryck. Och på datorn är
-högerklick den gest som motsvarar ett långtryck, så `contextmenu` öppnar samma
-meny i stället för att bara sväljas.
-
 Tre fällor:
 
 - `touch-action` på rutorna är `pan-y` så sidan fortfarande går att skrolla.
