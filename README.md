@@ -458,6 +458,21 @@ HTML5:s drag and drop finns inte på touch, så galleriet använder pointer-hän
 räcker det att dra fem pixlar. Rör sig fingret mer än åtta pixlar innan långtrycket
 gått är det en skrollning, och draget avbryts.
 
+**Drar man uppåt dyker en papperskorg upp.** Under ett drag finns två mål: platsen
+i rutnätet där bilden ska ligga, eller släppzonen för att radera den.
+
+Zonen ligger **fast överst i arket**, inte inskjuten ovanför rutnätet. Har man
+skrollat ned i galleriet hamnar en inskjuten zon utanför skärmen – och under ett
+drag går det inte att skrolla dit, eftersom `touchmove` är avstängd just då. Fast
+placering gör den alltid nåbar, och den ritas ut efter arkets kant så den
+fungerar både i bottenarket och i sidopanelen.
+
+Över zonen **slutar bilden söka en ny plats i rutnätet**. Annars hade ordningen
+ändrats på vägen upp, och ångrar man sig i frågerutan hamnar bilden på fel ställe
+i stället för där den låg. Släpper man på zonen ritas rutnätet om från `phCache`
+innan frågan ställs, av samma skäl: rutornas ordning i sidan säger ingenting när
+bilden släpptes utanför dem.
+
 **Håll och dra flyttar bilden, håll och släpp öppnar en meny.** Två gester på
 samma tryck, men de går inte att förväxla: den ena rör sig, den andra inte. Rör
 sig fingret mer än åtta punkter medan draget är igång räknas det som ett drag och

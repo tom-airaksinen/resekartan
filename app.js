@@ -15,7 +15,7 @@ const AUTH = {
 };
 const LS_KEY = 'resekartan.data', LS_AUTH = 'resekartan.unlocked', LS_SEEN = 'resekartan.inloggad', LS_LEGEND = 'resekartan.legend';
 const LS_FILTER = 'resekartan.filter';   // vilka resenärer som var valda sist, per enhet
-const APP_VERSION = 'v75';   // följ sw.js CACHE, så man ser vad som faktiskt körs
+const APP_VERSION = 'v76';   // följ sw.js CACHE, så man ser vad som faktiskt körs
 
 /* ============================ Tema ============================
    Temat är per enhet och ligger i localStorage, inte i DB – Hedvig ska kunna ha
@@ -1643,24 +1643,64 @@ function renderPhotos(){
    pointer-händelser: på telefonen startar ett långtryck draget, med mus räcker
    det att dra några pixlar. Rör sig fingret innan långtrycket hunnit gå är det
    en skrollning och draget avbryts. */
-const phDrag = { fig: null, on: false, armed: false, rörde: false, pending: false, timer: null, pid: null, x0: 0, y0: 0, bx: 0, by: 0, endedAt: 0 };
+const phDrag = { fig: null, on: false, armed: false, rörde: false, pending: false, timer: null, pid: null, x0: 0, y0: 0, bx: 0, by: 0, endedAt: 0, överZon: false };
+
+/* ---- Släppzonen ----
+   Drar man en bild uppåt dyker en papperskorg upp: antingen släpper man bilden
+   på sin nya plats i rutnätet, eller på zonen för att radera den.
+
+   Zonen ligger **fast överst i arket**, inte inskjuten ovanför rutnätet. Har man
+   skrollat ned i galleriet hamnar en inskjuten zon utanför skärmen, och under ett
+   drag går det inte att skrolla dit – touchmove är avstängd just då. Fast
+   placering gör den alltid nåbar, och den ritas ut efter arkets kant så den
+   fungerar både i bottenarket och i sidopanelen på desktop. */
+const phZon = document.getElementById('phZon');
+
+function stallZon(pa){
+  if(!phZon) return;
+  if(!pa){ phZon.hidden = true; phZon.classList.remove('over'); return; }
+  const r = body.getBoundingClientRect();
+  phZon.style.left = Math.round(r.left + 12) + 'px';
+  phZon.style.width = Math.round(r.width - 24) + 'px';
+  phZon.style.top = Math.round(r.top + 10) + 'px';
+  phZon.hidden = false;
+  // Framme först efter en bildruta, annars hinner övergången inte synas
+  requestAnimationFrame(() => phZon.classList.add('inne'));
+}
+const iZon = (x, y) => {
+  if(!phZon || phZon.hidden) return false;
+  const r = phZon.getBoundingClientRect();
+  return x >= r.left && x <= r.right && y >= r.top && y <= r.bottom;
+};
 const phFigures = () => [...document.querySelectorAll('#phGrid figure')];
 
 function phDragStart(x, y){
   const fig = phDrag.fig;
   if(!fig) return;
   clearTimeout(phDrag.timer);
-  phDrag.on = true; phDrag.armed = false; phDrag.bx = x; phDrag.by = y;
+  phDrag.on = true; phDrag.armed = false; phDrag.överZon = false; phDrag.bx = x; phDrag.by = y;
   fig.classList.add('drag');
   fig.style.transform = 'scale(1.06)';
   try { fig.setPointerCapture(phDrag.pid); } catch(e){}
   navigator.vibrate?.(8);
+  stallZon(true);
 }
 function phDragMove(x, y){
   const fig = phDrag.fig;
   // Rutnätet kan ha ritats om under fingret – då finns rutan inte kvar
   if(!fig.isConnected || !fig.closest('#phGrid')){ phDragReset(); return; }
   fig.style.transform = `translate(${x - phDrag.bx}px, ${y - phDrag.by}px) scale(1.06)`;
+  /* Över papperskorgen slutar bilden söka en ny plats i rutnätet. Annars hade
+     ordningen ändrats på vägen upp, och ångrar man sig hamnar bilden på fel
+     ställe i stället för där den låg. */
+  const över = iZon(x, y);
+  if(över !== phDrag.överZon){
+    phDrag.överZon = över;
+    phZon.classList.toggle('over', över);
+    fig.classList.toggle('raderas', över);
+    if(över) navigator.vibrate?.(12);
+  }
+  if(över) return;
   // Rutan under fingret: göm den dragna så elementFromPoint ser förbi den
   fig.style.pointerEvents = 'none';
   const over = document.elementFromPoint(x, y)?.closest('#phGrid figure');
@@ -1675,16 +1715,28 @@ function phDragMove(x, y){
   phFigures().forEach((f, i) => f.classList.toggle('hero', i === 0));
 }
 function phDragReset(){
-  if(phDrag.fig){ phDrag.fig.classList.remove('drag'); phDrag.fig.style.transform = ''; phDrag.fig.style.pointerEvents = ''; }
+  stallZon(false);
+  if(phDrag.fig){
+    phDrag.fig.classList.remove('drag', 'raderas');
+    phDrag.fig.style.transform = ''; phDrag.fig.style.pointerEvents = '';
+  }
   clearTimeout(phDrag.timer);
   const väntade = phDrag.on && phDrag.pending;
-  phDrag.fig = null; phDrag.on = false; phDrag.armed = false; phDrag.rörde = false; phDrag.timer = null;
+  phDrag.fig = null; phDrag.on = false; phDrag.armed = false; phDrag.rörde = false; phDrag.överZon = false; phDrag.timer = null;
   if(väntade) renderPhotos();        // omritningen som sköts upp under draget
 }
 async function phDragEnd(){
   const ids = phFigures().map(f => f.dataset.id);
+  const raderas = phDrag.överZon ? phDrag.fig?.dataset.id : null;
   phDragReset();
   phDrag.endedAt = Date.now();
+  if(raderas){
+    // Rita om från phCache: rutan släpptes på papperskorgen, inte på en plats i
+    // rutnätet, så ordningen i sidan säger ingenting. Ångrar man sig ligger
+    // bilden kvar där den låg.
+    renderPhotos();
+    return removePhoto(raderas);
+  }
   const byId = new Map(phCache.map(p => [p.id, p]));
   const next = ids.map(id => byId.get(id)).filter(Boolean);
   // Stämmer inte rutorna med bilderna vi har är sidan ur synk. Rita om från
