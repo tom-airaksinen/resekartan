@@ -15,7 +15,7 @@ const AUTH = {
 };
 const LS_KEY = 'resekartan.data', LS_AUTH = 'resekartan.unlocked', LS_SEEN = 'resekartan.inloggad', LS_LEGEND = 'resekartan.legend';
 const LS_FILTER = 'resekartan.filter';   // vilka resenärer som var valda sist, per enhet
-const APP_VERSION = 'v78';   // följ sw.js CACHE, så man ser vad som faktiskt körs
+const APP_VERSION = 'v79';   // följ sw.js CACHE, så man ser vad som faktiskt körs
 
 /* ============================ Tema ============================
    Temat är per enhet och ligger i localStorage, inte i DB – Hedvig ska kunna ha
@@ -695,11 +695,14 @@ const photos = {
   },
   /* Originalet skrivs först. Dör nätet mitt i finns bilden kvar, och posten i
      foton skapas nästa gång – tvärtom hade gett en rad utan bild bakom. */
-  async add(tripId, file){
+  /* `ord` sätts vid uppladdningen. Utan den föll nya bilder på byOrd:s
+     reservregel (9e9, sedan addedAt) och hade ingen egen plats förrän någon
+     dragit om ordningen en gång. */
+  async add(tripId, file, ord){
     const { url, w, h } = await shrink(file);
     const prev = await scaleUrl(url, PREV_SIDE, PREV_Q) || url;
     const id = photoId();
-    const meta = { tripId, place: null, prev, w, h,
+    const meta = { tripId, place: null, prev, w, h, ord: ord ?? 9e9,
                    addedAt: new Date().toISOString(), addedBy: CLOUD.user?.email || null };
     if(CLOUD.on){
       const { store } = CLOUD.mod;
@@ -1511,7 +1514,16 @@ const topp3 = (list, rad) => list.length
 const seedNote = () => (usingSeed() && !CLOUD.on)
   ? '<p class="example">Exempeldata. Lägg in era egna resor under Resor → Ny resa.</p>' : '';
 
+let arkVantar = false;
+
 function renderSheet(){
+  /* renderPhotos() skjuter redan upp sig själv under ett drag, men en omritning
+     av hela arket gjorde det inte – och den river galleriet med sig. Rutan man
+     håller i blir en lös nod, phDragMove() ser att den inte sitter kvar och
+     avbryter tyst. Utifrån ser det ut som att just den bilden inte går att dra.
+     Skjut upp till draget släppts. */
+  if(phDrag.on){ arkVantar = true; return; }
+  arkVantar = false;
   sheet.classList.remove('detail', 'country');
   /* Att skriva om innehållet nollställer inte skrollningen – står man nedskrollad
      i reselistan och öppnar en resa därifrån börjar detaljen mitt i, och
@@ -1790,8 +1802,15 @@ document.addEventListener('pointermove', e => {
   if(phDrag.armed){ if(far > 5) phDragStart(e.clientX, e.clientY); }
   else if(far > 8) phDragReset();          // fingret skrollar, inte drar
 });
-document.addEventListener('pointerup', () => { if(phDrag.on) phDragEnd(); else phDragReset(); });
-document.addEventListener('pointercancel', phDragReset);
+document.addEventListener('pointerup', async () => {
+  if(phDrag.on) await phDragEnd(); else phDragReset();
+  // Omritningen som sköts upp under draget, efter att ordningen hunnit sparas
+  if(arkVantar) renderSheet();
+});
+document.addEventListener('pointercancel', () => {
+  phDragReset();
+  if(arkVantar) renderSheet();
+});
 // Pointer-händelser stoppar inte skrollningen på touch – det gör bara den här
 document.addEventListener('touchmove', e => { if(phDrag.on) e.preventDefault(); }, { passive: false });
 
@@ -1925,7 +1944,7 @@ async function laggTillBilder(valda){
   for(const f of files){
     say();
     try {
-      const rec = await photos.add(tripAtStart, f);
+      const rec = await photos.add(tripAtStart, f, phCache.length);
       if(phTrip === tripAtStart) phCache.push(rec);
       logga('bild sparad');
     } catch(err){ failed++; logga('sparning fel: ' + (err.message || err)); }

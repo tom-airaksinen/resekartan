@@ -257,6 +257,11 @@ medan en som inte säger något förblir suddig. `visaOriginal()` gör nu bytet,
 förladdningen hämtar grannarna åt **båda** håll – bakåtbläddring var lika vanlig
 men förladdades inte alls.
 
+**Det finns ingen gräns för antalet bilder per resa.** `PH_BUDGET` på 700 kB är en
+budget per bild, inte ett antal. Varje bild är ett eget Firestore-dokument, så
+resans eget dokument växer inte med galleriet – bara omslaget på några kB ligger
+där.
+
 Bilder som lades in före v21 har originalet kvar i `foton`. De flyttas
 automatiskt, en i taget i bakgrunden, när resan öppnas. Originalet skrivs alltid
 före posten som pekar på det, så ett avbrutet nät aldrig lämnar en bildruta utan
@@ -492,6 +497,12 @@ Tre fällor:
   saken.
 - **`-webkit-touch-callout: none` måste sitta på bildrutorna.** Utan den öppnar
   iOS sin egen Dela/Spara-meny på långtryck, och draget kommer aldrig igång.
+- **Inte heller arket ritas om mitt i ett drag.** `renderPhotos()` sköt redan upp
+  sig själv, men en omritning av *hela* arket gjorde det inte – och den river
+  galleriet med sig. Rutan man håller i blir en lös nod, `phDragMove()` ser att
+  den inte sitter kvar och avbryter tyst. Utifrån ser det ut som att just den
+  bilden inte går att dra, medan alla andra fungerar. `renderSheet()` skjuts nu
+  upp till draget släppts, efter att ordningen hunnit sparas.
 - **`renderPhotos()` ritar inte om mitt i ett drag.** Rutan man håller i blir då
   en lös nod, och nästa flytt klistrar in den igen bredvid sin egen ersättare –
   samma bild syns två gånger fast räknaren säger rätt antal. Omritningen skjuts
