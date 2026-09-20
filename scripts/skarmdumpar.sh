@@ -18,6 +18,10 @@
 #     både formatet och layouten blir en riktig telefon.
 #   * utan --force-prefers-reduced-motion hinner kartans flygning aldrig bli
 #     klar: d3:s övergångar drivs inte av den virtuella tiden.
+#
+# Samma sak gäller allt annat som väntar på en bildruta: requestAnimationFrame
+# körs inte, CSS-övergångar räknas inte om, och getComputedStyle svarar med
+# utgångsvärdet. Verifiera sådant med en skärmbild i stället – den målas.
 
 set -euo pipefail
 REPO="$(cd "$(dirname "$0")/.." && pwd)"

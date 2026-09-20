@@ -15,7 +15,7 @@ const AUTH = {
 };
 const LS_KEY = 'resekartan.data', LS_AUTH = 'resekartan.unlocked', LS_SEEN = 'resekartan.inloggad', LS_LEGEND = 'resekartan.legend';
 const LS_FILTER = 'resekartan.filter';   // vilka resenärer som var valda sist, per enhet
-const APP_VERSION = 'v77';   // följ sw.js CACHE, så man ser vad som faktiskt körs
+const APP_VERSION = 'v78';   // följ sw.js CACHE, så man ser vad som faktiskt körs
 
 /* ============================ Tema ============================
    Temat är per enhet och ligger i localStorage, inte i DB – Hedvig ska kunna ha
@@ -1649,21 +1649,41 @@ const phDrag = { fig: null, on: false, armed: false, pending: false, timer: null
    Drar man en bild uppåt dyker en papperskorg upp: antingen släpper man bilden
    på sin nya plats i rutnätet, eller på zonen för att radera den.
 
-   Zonen ligger **fast överst i arket**, inte inskjuten ovanför rutnätet. Har man
-   skrollat ned i galleriet hamnar en inskjuten zon utanför skärmen, och under ett
-   drag går det inte att skrolla dit – touchmove är avstängd just då. Fast
-   placering gör den alltid nåbar, och den ritas ut efter arkets kant så den
-   fungerar både i bottenarket och i sidopanelen på desktop. */
+   Zonen ligger **ovanför arket**, över kartan – inte inuti galleriet. Låg den
+   inuti täckte den den översta bildraden, och eftersom zonen bara är ett
+   rektangeltest blev de rutorna omöjliga att släppa på. Ovanför arkets kant
+   finns aldrig några bildrutor.
+
+   Inskjuten ovanför rutnätet fungerar inte heller: har man skrollat ned i
+   galleriet hamnar den utanför skärmen, och under ett drag går det inte att
+   skrolla dit – touchmove är avstängd just då.
+
+   Måtten tas efter arket, så den följer med både bottenarket och sidopanelen. */
 const phZon = document.getElementById('phZon');
+const ZON_H = 52;
 
 function stallZon(pa){
   if(!phZon) return;
-  if(!pa){ phZon.hidden = true; phZon.classList.remove('over'); return; }
-  const r = body.getBoundingClientRect();
+  if(!pa){
+    phZon.hidden = true;
+    phZon.classList.remove('over', 'inne');
+    document.body.classList.remove('drar-bild');
+    return;
+  }
+  const r = sheet.getBoundingClientRect();
+  /* Säkerhetsmarginalen måste mätas på ett element. getPropertyValue på en
+     custom property ger tillbaka texten "env(safe-area-inset-top, 0px)", inte
+     pixlarna – klämningen hade alltså varit verkningslös på en riktig iPhone,
+     och zonen kunnat hamna under klockan. */
+  const safe = document.getElementById('safeProbe')?.offsetHeight || 0;
   phZon.style.left = Math.round(r.left + 12) + 'px';
   phZon.style.width = Math.round(r.width - 24) + 'px';
-  phZon.style.top = Math.round(r.top + 10) + 'px';
+  // Strax ovanför arket, men aldrig upp i hörnet där klockan och kameran sitter
+  phZon.style.top = Math.round(Math.max(safe + 6, r.top - ZON_H - 10)) + 'px';
   phZon.hidden = false;
+  // Toppraden säger ingenting mitt i ett drag, och vid högt uppdraget ark är den
+  // det enda som ligger där zonen ska vara
+  document.body.classList.add('drar-bild');
   // Framme först efter en bildruta, annars hinner övergången inte synas
   requestAnimationFrame(() => phZon.classList.add('inne'));
 }

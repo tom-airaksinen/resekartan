@@ -461,11 +461,22 @@ gått är det en skrollning, och draget avbryts.
 **Drar man uppåt dyker en papperskorg upp.** Under ett drag finns två mål: platsen
 i rutnätet där bilden ska ligga, eller släppzonen för att radera den.
 
-Zonen ligger **fast överst i arket**, inte inskjuten ovanför rutnätet. Har man
-skrollat ned i galleriet hamnar en inskjuten zon utanför skärmen – och under ett
-drag går det inte att skrolla dit, eftersom `touchmove` är avstängd just då. Fast
-placering gör den alltid nåbar, och den ritas ut efter arkets kant så den
-fungerar både i bottenarket och i sidopanelen.
+Zonen ligger **ovanför arket**, över kartan. Först låg den överst *inuti* arket,
+och då täckte den den översta bildraden när galleriet var skrollat ditupp – och
+eftersom zonen bara är ett rektangeltest blev de rutorna omöjliga att släppa på.
+Ovanför arkets kant finns aldrig några bildrutor, vid någon arkhöjd.
+
+Inskjuten ovanför rutnätet fungerar inte heller: har man skrollat ned i galleriet
+hamnar den utanför skärmen, och under ett drag går det inte att skrolla dit
+eftersom `touchmove` är avstängd just då.
+
+Toppraden göms medan man drar. Den säger ingenting då, och med arket uppdraget
+till 90 % är den det enda som ligger där zonen ska vara.
+
+**Säkerhetsmarginalen mäts på ett element**, `#safeProbe`, inte genom att läsa en
+custom property. `getComputedStyle(...).getPropertyValue('--x')` ger tillbaka
+texten `env(safe-area-inset-top, 0px)`, inte pixlarna – klämningen hade varit
+verkningslös på en riktig iPhone och zonen kunnat hamna under klockan.
 
 Över zonen **slutar bilden söka en ny plats i rutnätet**. Annars hade ordningen
 ändrats på vägen upp, och ångrar man sig i frågerutan hamnar bilden på fel ställe

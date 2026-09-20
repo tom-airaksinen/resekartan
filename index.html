@@ -405,6 +405,11 @@ h2.sec:first-child{margin-top:8px}
 .grid-ph figure.raderas img{opacity:.55}
 
 /* ---------- Släppzonen under ett drag ---------- */
+#safeProbe{position:fixed;top:0;left:0;width:0;height:env(safe-area-inset-top,0px);
+  visibility:hidden;pointer-events:none}
+/* Toppraden göms medan man drar: den säger ingenting då, och vid högt uppdraget
+   ark är den det enda som ligger där släppzonen ska vara. */
+body.drar-bild #top{opacity:0;pointer-events:none;transition:opacity .16s}
 /* z-index 70: över arket och galleriet, under bildvisaren (80). */
 .phzon{position:fixed;z-index:70;display:flex;align-items:center;justify-content:center;gap:9px;
   height:52px;border-radius:14px;pointer-events:none;
@@ -908,6 +913,11 @@ h2.sec:first-child{margin-top:8px}
     </div>
   </div>
 </section>
+
+<!-- Mätsticka för säkerhetsmarginalen upptill. env() går inte att läsa ur en
+     custom property med getPropertyValue – där kommer texten tillbaka, inte
+     pixlarna – så stallZon() mäter det här elementets höjd i stället. -->
+<div id="safeProbe" aria-hidden="true"></div>
 
 <div id="phZon" class="phzon" hidden aria-hidden="true">
   <svg viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg>
