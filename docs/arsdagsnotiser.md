@@ -90,18 +90,31 @@ telefonerna åt.
 
 ## När
 
-**Klockan 16 svensk tid**, inte inställbart, och det står i rutan. Tidig kväll,
-när man har lust att titta på bilder.
+**Från klockan 16 svensk tid**, inte inställbart, och det står i rutan. Tidig
+kväll, när man har lust att titta på bilder.
 
 Att tiden är fast gör sändaren enklare: Flippa kör var femtonde minut för att
 träffa allas valda tider, här räcker en gång om dagen.
 
-**Tidigast 16, inte exakt 16.** Actions-cron är i UTC, och schemalagda jobb
-startar ofta några minuter sent – ibland mycket mer. Med ett exakt timtest hade en
-försenad körning tyst hoppat över dagen. I stället gör jobbet fyra försök (14:00,
-15:30, 17:30 och 19:30 UTC), skickar tidigast 16 svensk tid, och varje
-prenumeration minns i `lastSent` vilket datum den senast fick något. Den första
-körningen som lyckas gör jobbet; resten ser att dagen är avklarad och avstår.
+**Ett fönster, 16–20, inte en undre gräns.** Actions-cron är i UTC, och
+schemalagda jobb ligger i kö: uppmätt **2,5 till 3,5 timmars försening** på det
+här repot. Med bara en undre gräns ("tidigast 16") skickade en försenad körning
+klockan 23:19 på kvällen – en notis mitt i natten.
+
+Nu gäller både en undre och en övre gräns, och jobbet gör nio försök varje timme
+från 10:10 till 18:10 UTC. Varje prenumeration minns i `lastSent` vilket datum
+den senast fick något, så den första körning som landar i fönstret gör jobbet och
+resten avstår. Hamnar ingen körning i fönstret hoppas dagen över – bättre än en
+notis mitt i natten.
+
+| Schemalagd | I tid | 3 h sen |
+| --- | --- | --- |
+| 11:10 UTC | 13:10 avstår | 16:10 **skickar** |
+| 14:10 UTC | 16:10 **skickar** | 19:10 skickar |
+| 17:10 UTC | 19:10 skickar | 22:10 avstår |
+
+Oavsett om körningarna är i tid eller försenade landar någon i fönstret, och den
+tidigaste blir 16:10.
 
 Slår man på notiser efter 16 märks dagen som redan avklarad, annars hade dagens
 notis kommit med en gång – som ett hopp ur ingenstans.
@@ -110,6 +123,12 @@ notis kommit med en gång – som ett hopp ur ingenstans.
 
 En resa → resan öppnas direkt (`#resa=<id>`). Att visa en lista med ett enda
 objekt i vore ett extra steg utan innehåll.
+
+**Filtret får inte dölja resan man just blivit lovad.** Stod resenärsfiltret på
+någon som inte var med öppnades resan utan sina pluppar och utan sitt land färgat
+– man fick en notis om Polen och möttes av en tom karta. `sakraSynlighet()` byter
+till Alla resor när det behövs, och säger i en toast varför. Syns resan ändå rörs
+filtret inte.
 
 Flera → en årsdagsvy i arket (`#arsdag=YYYY-MM-DD`), som landvyn fast med "för X
 år sedan" på varje rad. Arket har redan en historikstack, så Tillbaka fungerar

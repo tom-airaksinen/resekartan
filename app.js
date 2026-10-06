@@ -15,7 +15,7 @@ const AUTH = {
 };
 const LS_KEY = 'resekartan.data', LS_AUTH = 'resekartan.unlocked', LS_SEEN = 'resekartan.inloggad', LS_LEGEND = 'resekartan.legend';
 const LS_FILTER = 'resekartan.filter';   // vilka resenärer som var valda sist, per enhet
-const APP_VERSION = 'v79';   // följ sw.js CACHE, så man ser vad som faktiskt körs
+const APP_VERSION = 'v80';   // följ sw.js CACHE, så man ser vad som faktiskt körs
 
 /* ============================ Tema ============================
    Temat är per enhet och ligger i localStorage, inte i DB – Hedvig ska kunna ha
@@ -2944,13 +2944,13 @@ function notisAvsnitt(){
     <p>"I dag för fem år sedan kom ni hem från Rumänien." En notis på årsdagen av en
     avslutad resa, med en väg rakt in i resan och bilderna.</p>
     <label class="check"><input type="checkbox" id="pushOn"> Slå på för den här enheten</label>
-    <p class="hint">Skickas vid 16-tiden. Varje telefon och padda väljer själv.</p>
+    <p class="hint">Skickas på eftermiddagen, från 16-tiden. Varje telefon och padda väljer själv.</p>
   </div>`;
 
   return rubrik + `
     <div class="field"><label class="check"><input type="checkbox" id="pushOn" checked>
       Skicka årsdagsnotiser till den här enheten</label></div>
-    <p class="hint" style="margin-top:-4px">Skickas vid 16-tiden.</p>
+    <p class="hint" style="margin-top:-4px">Skickas på eftermiddagen, från 16-tiden.</p>
     <label class="fl">Hur ofta</label>
     <div class="lagen">${Object.entries(LAGEN).map(kort).join('')}</div>
     <p class="hint">${val.personer.length
@@ -4465,13 +4465,35 @@ async function andraNotisVal(patch){
 /* ---- Notis-tryck ---- */
 /* Adressen bär vart trycket ska leda: #resa=<id> för en enda resa,
    #arsdag=YYYY-MM-DD när flera hade årsdag samma dag. */
+/* Filtret kan dölja just den resa notisen handlade om. Då öppnas resan utan sina
+   pluppar och sitt land på kartan, och det ser ut som att något är trasigt – man
+   har ju precis blivit lovad en resa till Polen. Står filtret i vägen byter vi
+   till Alla resor och säger varför. Står det inte i vägen rör vi det inte. */
+function sakraSynlighet(resor){
+  if(!filter.size) return;
+  const dolda = resor.filter(t => t && !t.stops.some(s => inFilter(t, s)));
+  if(!dolda.length) return;
+  const gammalt = filterLabel();
+  filter.clear();
+  sparaFilter();
+  renderWho();
+  renderViews();
+  toast(`Filtret stod på ${gammalt} och dolde resan. Bytte till Alla resor.`);
+}
+
 function oppnaFranAdress(){
   const h = location.hash || '';
   const resa = h.match(/^#resa=(.+)$/), ars = h.match(/^#arsdag=(\d{4}-\d{2}-\d{2})$/);
   if(!resa && !ars) return false;
   history.replaceState(null, '', location.pathname + location.search);
-  if(resa) showTrip(decodeURIComponent(resa[1]));
-  else showArsdag(ars[1]);
+  if(resa){
+    const id = decodeURIComponent(resa[1]);
+    sakraSynlighet([DB.trips.find(t => t.id === id)]);
+    showTrip(id);
+  } else {
+    sakraSynlighet(arsdagarPa(ars[1], 'allt', null).map(x => x.t));
+    showArsdag(ars[1]);
+  }
   return true;
 }
 addEventListener('hashchange', oppnaFranAdress);

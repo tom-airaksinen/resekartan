@@ -2,14 +2,20 @@ name: Årsdagsnotiser
 
 on:
   schedule:
-    # Actions-cron är i UTC, och körningar startar ofta sent. Fyra försök täcker
-    # sommar- och vintertid med marginal; skriptet skickar tidigast 16 svensk tid
-    # och minns per prenumeration vilket datum den senast fick något, så bara den
-    # första körningen som lyckas gör något.
-    - cron: "0 14 * * *"
-    - cron: "30 15 * * *"
-    - cron: "30 17 * * *"
-    - cron: "30 19 * * *"
+    # Actions-cron är i UTC, och schemalagda körningar ligger i kö: uppmätt 2,5
+    # till 3,5 timmars försening. Därför många försök med start långt före målet,
+    # i stället för fyra nära det. Skriptet skickar bara när klockan i Stockholm
+    # är 16–20 och minns per prenumeration vilket datum den senast fick något, så
+    # den första körning som landar i fönstret gör jobbet och resten avstår.
+    - cron: "10 10 * * *"
+    - cron: "10 11 * * *"
+    - cron: "10 12 * * *"
+    - cron: "10 13 * * *"
+    - cron: "10 14 * * *"
+    - cron: "10 15 * * *"
+    - cron: "10 16 * * *"
+    - cron: "10 17 * * *"
+    - cron: "10 18 * * *"
   workflow_dispatch:
     inputs:
       tvinga:

@@ -25,7 +25,12 @@ const BAS = process.env.APP_URL || 'https://resekartan.tomairaksinen.se/';
 const PROJEKT = 'resekartan-3b126';
 const API_NYCKEL = 'AIzaSyCwHQkNu1DRWNCckIHq3fftZOmAw0rHgxQ';
 const DOKUMENT = `https://firestore.googleapis.com/v1/projects/${PROJEKT}/databases/(default)/documents`;
-const TIMME = 16;                       // tidigast, svensk tid
+/* Fönstret i svensk tid. Både en undre och en **övre** gräns: schemalagda jobb
+   på GitHub ligger i kö och startar ofta flera timmar sent – uppmätt 2,5 till
+   3,5 timmar – och med bara en undre gräns skickade en försenad körning klockan
+   23 på kvällen. Hamnar ingen körning i fönstret hoppas dagen över, och det är
+   bättre än en notis mitt i natten. */
+const TIMME_FRAN = 16, TIMME_TILL = 20;
 const TVINGA = process.env.TVINGA === '1';   // för manuell körning och test
 const TORRKORNING = process.env.TORRKORNING === '1';
 /* En riktig notis till alla enheter, oavsett årsdagar och klockslag. Finns för
@@ -217,8 +222,8 @@ async function main(){
      minuter sent och ibland mycket mer, och med ett exakt timtest hoppades dagen
      tyst över. I stället minns varje prenumeration vilket datum den senast fick
      något, så en försenad körning hinner ikapp utan att någon får dubbelt. */
-  if(timme < TIMME && !TVINGA && !PROVNOTIS){
-    console.log(`Klockan är ${timme} i Stockholm, notiser går ut tidigast ${TIMME}. Gör inget.`);
+  if((timme < TIMME_FRAN || timme > TIMME_TILL) && !TVINGA && !PROVNOTIS){
+    console.log(`Klockan är ${timme} i Stockholm, notiser går ut ${TIMME_FRAN}–${TIMME_TILL}. Gör inget.`);
     return;
   }
   webpush.setVapidDetails('mailto:tom.airaksinen@kleer.se', VAPID_PUBLIC, VAPID_PRIVATE);
